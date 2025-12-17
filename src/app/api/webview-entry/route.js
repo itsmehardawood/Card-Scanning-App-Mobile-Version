@@ -225,6 +225,7 @@
 //   });
 // }
 
+
 import { NextResponse } from "next/server";
 
 // ----------------------------------------------------------------------------
@@ -246,8 +247,7 @@ const cleanupSessions = () => {
 // ----------------------------------------------------------------------------
 export async function POST(request) {
   try {
-    console.log("------------------------------------------------");
-    console.log("🔍 DEBUG START: Android Request Received");
+  
 
     // 1. CLONE & READ RAW BODY
     const requestClone = request.clone();
@@ -304,12 +304,7 @@ export async function POST(request) {
       urlParams.get("device_info") ||
       urlParams.get("device_Info");
 
-    console.log("🕵️ FINAL EXTRACTION:");
-    console.log("   Merchant:", merchantId);
-    console.log(
-      "   Device Info Present:",
-      !!deviceInfoRaw && deviceInfoRaw.length > 0
-    );
+
 
     // 3. PROCESS DEVICE INFO
     if (deviceInfoRaw && deviceInfoRaw.length > 0) {
@@ -360,7 +355,6 @@ export async function POST(request) {
         const origin = new URL(request.url).origin;
         const targetApiUrl = `${origin}/securityscan/api/device-info`;
 
-        console.log("🔄 Delegating to local API:", targetApiUrl);
 
         fetch(targetApiUrl, {
           method: "POST",
@@ -381,7 +375,7 @@ export async function POST(request) {
         const baseUrl = "https://testmobile.cardnest.io";
         const redirectUrl = `${baseUrl}/securityscan?session=${sessionId}&source=post`;
 
-        console.log("🚀 Redirecting WITH data to:", redirectUrl);
+        // console.log("🚀 Redirecting WITH data to:", redirectUrl);
         return NextResponse.redirect(redirectUrl, 302);
       } catch (error) {
         console.error("❌ Error parsing device info:", error);
@@ -401,7 +395,7 @@ export async function POST(request) {
     const baseUrl = "https://testmobile.cardnest.io";
     const redirectUrl = `${baseUrl}/securityscan?session=${fallbackSessionId}&source=post&status=missing_device_info`;
 
-    console.log("🚀 Redirecting (Fallback) to:", redirectUrl);
+    // console.log("🚀 Redirecting (Fallback) to:", redirectUrl);
     return NextResponse.redirect(redirectUrl, 302);
   } catch (error) {
     console.error("💥 SERVER ERROR:", error);
