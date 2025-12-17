@@ -709,6 +709,48 @@ const CardDetectionApp = () => {
     }, 1000);
   };
 
+  // Flashlight control functions
+  const enableFlashlight = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.torch) {
+          await track.applyConstraints({
+            advanced: [{ torch: true }]
+          });
+          setFlashlightEnabled(true);
+          console.log("🔦 Flashlight enabled");
+          return true;
+        } else {
+          console.log("⚠️ Flashlight not supported on this device");
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error enabling flashlight:", error);
+      return false;
+    }
+  };
+
+  const disableFlashlight = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        await track.applyConstraints({
+          advanced: [{ torch: false }]
+        });
+        setFlashlightEnabled(false);
+        console.log("🔦 Flashlight disabled");
+      }
+    } catch (error) {
+      console.error("❌ Error disabling flashlight:", error);
+    }
+  };
+
   // Start card scanning directly with front side detection
   const startCardScanning = async () => {
     console.log("🚀 startCardScanning called, maxAttemptsReached:", maxAttemptsReached, "detectionActive:", detectionActive);
