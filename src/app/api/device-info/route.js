@@ -102,7 +102,7 @@ export async function POST(request) {
     try {
       console.log('📤 Forwarding device info to Laravel API...');
       
-      const laravelResponse = await fetch('http://18.206.13.3:8001/api/device-info', {
+      const laravelResponse = await fetch('https://admin.cardnest.io/api/device-info', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
