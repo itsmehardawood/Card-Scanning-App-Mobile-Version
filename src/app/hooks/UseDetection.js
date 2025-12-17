@@ -13,7 +13,8 @@ export const useDetection = (
   setErrorMessage,
   setFrontScanState,
   stopRequestedRef,
-  handleDetectionFailure // Add this parameter for validation failures
+  handleDetectionFailure, // Add this parameter for validation failures
+  disableFlashlight // Add this parameter to control flashlight
 ) => {
   const captureIntervalRef = useRef(null);
 
@@ -75,6 +76,12 @@ export const useDetection = (
     } catch (screenError) {
       console.error("❌ Screen detection error:", screenError);
       // Continue with normal detection even if screen check fails
+    }
+    
+    // 🔦 Turn off flashlight after screen detection check
+    if (disableFlashlight) {
+      console.log("🔦 Turning off flashlight after screen detection");
+      await disableFlashlight();
     }
     
     console.log("🔄 Continuing with normal card detection...");
