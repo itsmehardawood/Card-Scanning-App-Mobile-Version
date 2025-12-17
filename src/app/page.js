@@ -78,6 +78,9 @@ const CardDetectionApp = () => {
     motionPromptTimestamp: null,
   });
 
+  // Flashlight state
+  const [flashlightEnabled, setFlashlightEnabled] = useState(false);
+
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
     display_logo: "",
@@ -106,7 +109,7 @@ const CardDetectionApp = () => {
       setDebugInfo("Fetching existing display info...");
 
       const response = await fetch(
-        `https://admin.cardnest.io/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
+        `http://52.55.249.9:8001/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
           merchantId
         )}`,
         {
@@ -271,6 +274,9 @@ const CardDetectionApp = () => {
     console.log(`🚨 Detection failure - Operation: ${operation}, Session ID: ${sessionId}, Current Attempt: ${attemptCount + 1}`);
     clearDetectionTimeout();
     stopRequestedRef.current = true;
+
+    // 🔦 Disable flashlight on failure
+    disableFlashlight();
 
     // Clear all intervals
     if (captureIntervalRef.current) {
@@ -444,8 +450,9 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vYWRtaW4uY2FyZG5lc3QuaW8vYXBpL21lcmNoYW50c2Nhbi9nZW5lcmF0ZVRva2VuIiwiaWF0IjoxNzY0MTU3MzA5LCJleHAiOjE3NjQxNjA5MDksIm5iZiI6MTc2NDE1NzMwOSwianRpIjoiNEdHV2FrUEJMc3RJUWIxYiIsInN1YiI6IjI3NjU4MVYzMzk0NVkyNzAiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3Iiwic2Nhbl9pZCI6ImViYTQyMzY1IiwibWVyY2hhbnRfaWQiOiIyNzY1ODFWMzM5NDVZMjcwIiwiZW5jcnlwdGlvbl9rZXkiOiJFYVhhZlhjM1R0eW4wam5qIiwiZmVhdHVyZXMiOm51bGx9.HUB9W-tfhK1QMZDdGd_SohsRg6GfxvCMTMGnL6-Q2gg",
-           timestamp: Date.now(),
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FkbWluLmNhcmRuZXN0LmlvL2FwaS9tZXJjaGFudHNjYW4vZ2VuZXJhdGVUb2tlbiIsImlhdCI6MTc2NTk1OTE0MywiZXhwIjoxNzY1OTYyNzQzLCJuYmYiOjE3NjU5NTkxNDMsImp0aSI6ImMxT2Q1WWk4RU0zSTJRbzkiLCJzdWIiOiIyNzY1ODFWMzM5NDVZMjcwIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsInNjYW5faWQiOiJlYmE0MjM2NSIsIm1lcmNoYW50X2lkIjoiMjc2NTgxVjMzOTQ1WTI3MCIsImVuY3J5cHRpb25fa2V5IjoiRWFYYWZYYzNUdHluMGpuaiIsImZlYXR1cmVzIjpudWxsfQ.eVzyeYGVcWRzmtfRLjb-9CDLJpqOMBF-LSGOI417eNM",
+        
+          timestamp: Date.now(),
           source: "development_demo",
         };
 
@@ -715,6 +722,9 @@ const CardDetectionApp = () => {
       return;
     }
 
+    // 🔦 Enable flashlight
+    await enableFlashlight();
+
     // Initialize session ONLY if not already set
     let currentSessionId = sessionId;
     if (!currentSessionId) {
@@ -924,12 +934,16 @@ const CardDetectionApp = () => {
               "✅ SUCCESS/ALREADY_COMPLETED STATUS received in page.js - transitioning to 'results'"
             );
             console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}, Complete Scan: ${finalResult.complete_scan}`);
+            
+            // 🔦 Disable flashlight on success
+            disableFlashlight();
+            
             setFinalOcrResults(finalResult);
             setCurrentPhase("back-complete");
             setAttemptCount(0);
             setCurrentOperation("");
             
-            // Show success message for 3 seconds before showing results
+            // Show success message for 1 second before showing results
             setTimeout(() => {
               setCurrentPhase("results");
             }, 1000);

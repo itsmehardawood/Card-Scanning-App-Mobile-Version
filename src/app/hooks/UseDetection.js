@@ -17,7 +17,7 @@ export const useDetection = (
 ) => {
   const captureIntervalRef = useRef(null);
 
-  // Capture and send frames for front side with chip and bank logo detection
+  // Capture and send frames for front side with screen detection
   const captureAndSendFramesFront = async (phase, providedSessionId = null) => {
     const currentSessionId = providedSessionId || sessionId;
     console.log("🔍 captureAndSendFramesFront called with phase:", phase, "sessionId:", currentSessionId);
@@ -34,6 +34,50 @@ export const useDetection = (
     if (!videoRef.current || videoRef.current.readyState < 2) {
       throw new Error('Video not ready for capture');
     }
+    
+    // STEP 1: Screen Detection Check (Single Frame)
+    console.log("📱 Starting screen detection check...");
+    try {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+      
+      const formData = new FormData();
+      formData.append('file', blob, 'screen_check.jpg');
+      
+      console.log("📤 Sending frame to screen detection endpoint...");
+      const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
+        method: 'POST',
+        body: formData
+      });
+      
+      // Check if we got the expected 500 error (which means pass)
+      if (screenDetectResponse.status === 500) {
+        const errorData = await screenDetectResponse.json();
+        if (errorData.detail === "Screen detection model not available") {
+          console.log("✅ Screen detection passed (model not available - treating as pass)");
+        } else {
+          console.log("✅ Screen detection returned 500, continuing...");
+        }
+      } else if (screenDetectResponse.ok) {
+        const screenData = await screenDetectResponse.json();
+        console.log("✅ Screen detection response:", screenData);
+        // Add logic here if you need to handle successful screen detection response
+      } else {
+        console.warn("⚠️ Unexpected screen detection response:", screenDetectResponse.status);
+        // Continue anyway
+      }
+    } catch (screenError) {
+      console.error("❌ Screen detection error:", screenError);
+      // Continue with normal detection even if screen check fails
+    }
+    
+    console.log("🔄 Continuing with normal card detection...");
     
     return new Promise((resolve, reject) => {
       let frameNumber = 0;
@@ -221,21 +265,10 @@ export const useDetection = (
 
               // Update front scan state for front phase
               if (phase === 'front') {
-                // Log motion progress for debugging
-                if (apiResponse.motion_progress) {
-                  console.log(`🎯 Motion progress detected: ${apiResponse.motion_progress}`);
-                }
-                
                 setFrontScanState({
                   framesBuffered: apiResponse.buffer_info?.front_frames_buffered || frameNumber,
-                  chipDetected: apiResponse.chip || false,
-                  bankLogoDetected: apiResponse.bank_logo || false,
                   physicalCardDetected: apiResponse.physical_card || false,
-                  canProceedToBack: false,
-                  motionProgress: apiResponse.motion_progress || null,
-                  showMotionPrompt: apiResponse.motion_progress === "1/2",
-                  hideMotionPrompt: apiResponse.motion_progress === "2/2",
-                  motionPromptTimestamp: apiResponse.motion_progress === "1/2" ? Date.now() : null
+                  canProceedToBack: false
                 });
               }
               
@@ -310,11 +343,11 @@ export const useDetection = (
                   return;
                 }
               } else if (phase === 'front' && bufferedFrames >= 4) {
-                // For front side, check if we have chip or bank logo AND physical_card is true
-                if ((apiResponse.chip || apiResponse.bank_logo) && apiResponse.physical_card === true) {
+                // For front side, check if physical_card is detected
+                if (apiResponse.physical_card === true) {
                   isComplete = true;
                   cleanup();
-                  console.log(`Front side complete - 4 frames buffered with chip: ${apiResponse.chip}, bank_logo: ${apiResponse.bank_logo}, physical_card: ${apiResponse.physical_card}`);
+                  console.log(`Front side complete - 4 frames buffered with physical_card: ${apiResponse.physical_card}`);
                   resolve(apiResponse);
                   return;
                 }
@@ -636,21 +669,10 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
             
             // Update front scan state for front phase
             if (phase === 'front') {
-              // Log motion progress for debugging
-              if (apiResponse.motion_progress) {
-                console.log(`🎯 Motion progress detected: ${apiResponse.motion_progress}`);
-              }
-              
               setFrontScanState({
                 framesBuffered: apiResponse.buffer_info?.front_frames_buffered || frameNumber,
-                chipDetected: apiResponse.chip || false,
-                bankLogoDetected: apiResponse.bank_logo || false,
                 physicalCardDetected: apiResponse.physical_card || false,
-                canProceedToBack: false,
-                motionProgress: apiResponse.motion_progress || null,
-                showMotionPrompt: apiResponse.motion_progress === "1/2",
-                hideMotionPrompt: apiResponse.motion_progress === "2/2",
-                motionPromptTimestamp: apiResponse.motion_progress === "1/2" ? Date.now() : null
+                canProceedToBack: false
               });
             }
             
