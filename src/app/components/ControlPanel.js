@@ -12,6 +12,8 @@ const ControlPanel = ({
   onReset,
   onTryAgain,
   onStartOver,
+  onFakeCardRetry,
+  fakeCardDetectedPhase,
   frontScanState,
   countdown,
   errorMessage,
@@ -42,6 +44,46 @@ const ControlPanel = ({
         finalOcrResults={finalOcrResults} 
         onReset={onReset} 
       />
+    );
+  }
+
+  // Fake card detected - show retry option without counting as failed attempt
+  if (currentPhase === 'fake-card-error') {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="text-center">
+          <div className="mb-4">
+            <h3 className="text-lg sm:text-xl font-semibold text-red-600 mb-2">Fake Card Detected</h3>
+            <p className="text-red-700 mb-3">{errorMessage || 'Please use an original physical card.'}</p>
+            
+            {/* <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-red-600 text-sm font-medium">
+                {fakeCardDetectedPhase === 'front' 
+                  ? 'Fake card detected on front side' 
+                  : 'Fake card detected on back side'}
+              </p>
+              <p className="text-gray-600 text-sm mt-2">
+                Please ensure you are using an original, physical card and try again.
+              </p>
+            </div> */}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={onFakeCardRetry}
+              className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Try Again
+            </button>
+            {/* <button
+              onClick={onStartOver}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Start Over
+            </button> */}
+          </div>
+        </div>
+      </div>
     );
   }
 

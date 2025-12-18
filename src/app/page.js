@@ -58,6 +58,7 @@ const CardDetectionApp = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const [maxAttemptsReached, setMaxAttemptsReached] = useState(false);
   const [currentOperation, setCurrentOperation] = useState(""); // 'front', 'back'
+  const [fakeCardDetectedPhase, setFakeCardDetectedPhase] = useState(null); // Track which phase detected fake card
   const [debugInfo, setDebugInfo] = useState("");
   const [existingLogoUrl, setExistingLogoUrl] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -562,8 +563,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYwNTI3MjYsImV4cCI6MTc2NjA1NjMyNiwibmJmIjoxNzY2MDUyNzI2LCJqdGkiOiJxQnduTGFneVpSSHk2VWc5Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.jcQye880RozH3HN1ukdwc5owxTsEIqU1ioFuQu1ejVw",
-          
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYwNTY0MTksImV4cCI6MTc2NjA2MDAxOSwibmJmIjoxNzY2MDU2NDE5LCJqdGkiOiJqTGVqU0ROZVhseGxHeUZVIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.69JEZ-phUp85jBcOhJX4BlpS_9RGSZQs6EhaSpDbK9c",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -908,8 +908,8 @@ const CardDetectionApp = () => {
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
             setErrorMessage('Fake card detected on front side. Please use an original physical card.');
-            setCurrentPhase('error');
-            setMaxAttemptsReached(true); // Block further attempts
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('front');
             return;
           }
           
@@ -997,8 +997,8 @@ const CardDetectionApp = () => {
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
             setErrorMessage('Fake card detected on front side. Please use an original physical card.');
-            setCurrentPhase('error');
-            setMaxAttemptsReached(true); // Block further attempts
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('front');
             return;
           }
           
@@ -1096,8 +1096,8 @@ const CardDetectionApp = () => {
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on back side - stopping scan");
             setErrorMessage('Fake card detected on back side. Please use an original physical card.');
-            setCurrentPhase('error');
-            setMaxAttemptsReached(true); // Block further attempts
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('back');
             return;
           }
           
@@ -1258,6 +1258,45 @@ const CardDetectionApp = () => {
     stopRequestedRef.current = false;
   };
 
+  const handleFakeCardRetry = () => {
+    console.log("🔄 Fake card retry - Restarting from phase:", fakeCardDetectedPhase);
+    
+    // Increment attempt count
+    const newAttemptCount = attemptCount + 1;
+    setAttemptCount(newAttemptCount);
+    console.log(`🔢 Fake card retry attempt count: ${newAttemptCount}/${MAX_ATTEMPTS}`);
+    
+    // Check if max attempts reached
+    if (newAttemptCount >= MAX_ATTEMPTS) {
+      setMaxAttemptsReached(true);
+      setErrorMessage("Maximum attempts reached. Please contact support for assistance.");
+      setCurrentPhase("max-attempts-reached");
+      setFakeCardDetectedPhase(null);
+      return;
+    }
+    
+    // Clear error state
+    setErrorMessage("");
+    stopRequestedRef.current = false;
+    
+    // Restart from the appropriate phase
+    if (fakeCardDetectedPhase === 'front') {
+      console.log("🔄 Restarting from front side scan");
+      setCurrentPhase("idle");
+      setFakeCardDetectedPhase(null);
+      // Don't reset session - use same session for tracking
+    } else if (fakeCardDetectedPhase === 'back') {
+      console.log("🔄 Restarting from back side scan");
+      setCurrentPhase("ready-for-back");
+      setFakeCardDetectedPhase(null);
+      // Keep the same session since front was successful
+    } else {
+      // Fallback to idle
+      setCurrentPhase("idle");
+      setFakeCardDetectedPhase(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-700 to-black p-4 sm:p-4">
       <div className="container mx-auto max-w-4xl">
@@ -1345,6 +1384,8 @@ const CardDetectionApp = () => {
           onReset={resetApplication}
           onTryAgain={handleTryAgain}
           onStartOver={handleStartOver}
+          onFakeCardRetry={handleFakeCardRetry}
+          fakeCardDetectedPhase={fakeCardDetectedPhase}
           frontScanState={frontScanState}
           countdown={countdown}
           errorMessage={errorMessage}
