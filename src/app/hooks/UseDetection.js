@@ -57,7 +57,7 @@ export const useDetection = (
         body: formData
       });
       
-      // Check if we got the expected 500 error (which means pass)
+      // Check if we got the expected 500 error (which means pass for now)
       if (screenDetectResponse.status === 500) {
         const errorData = await screenDetectResponse.json();
         if (errorData.detail === "Screen detection model not available") {
@@ -67,13 +67,34 @@ export const useDetection = (
         }
       } else if (screenDetectResponse.ok) {
         const screenData = await screenDetectResponse.json();
-        console.log("✅ Screen detection response:", screenData);
-        // Add logic here if you need to handle successful screen detection response
+        console.log("📊 Front side screen detection response:", screenData);
+        
+        // Check is_screen property
+        if (screenData.is_screen === false) {
+          console.log("✅ Front side screen detection passed - real card detected");
+          console.log(`   Confidence: ${screenData.confidence}, Prediction: ${screenData.prediction_class}`);
+        } else if (screenData.is_screen === true) {
+          console.log("❌ Front side screen detected - this appears to be a screen/photo, not physical card");
+          console.log(`   Confidence: ${screenData.confidence}, Message: ${screenData.message}`);
+          
+          // 🔦 Turn off flashlight before throwing error
+          if (disableFlashlight) {
+            await disableFlashlight();
+          }
+          
+          throw new Error('Fake card detected on front side - screen or photo detected instead of physical card');
+        } else {
+          console.warn("⚠️ is_screen property not found in response, continuing...");
+        }
       } else {
         console.warn("⚠️ Unexpected screen detection response:", screenDetectResponse.status);
         // Continue anyway
       }
     } catch (screenError) {
+      if (screenError.message.includes('Fake card detected')) {
+        // Re-throw fake card errors
+        throw screenError;
+      }
       console.error("❌ Screen detection error:", screenError);
       // Continue with normal detection even if screen check fails
     }
@@ -506,6 +527,77 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
   if (!videoRef.current || videoRef.current.readyState < 2) {
     throw new Error('Video not ready for capture');
   }
+  
+  // STEP 1: Screen Detection Check for BACK side (Single Frame)
+  console.log("📱 Starting screen detection check for BACK side...");
+  try {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    
+    const formData = new FormData();
+    formData.append('file', blob, 'back_screen_check.jpg');
+    
+    console.log("📤 Sending back side frame to screen detection endpoint...");
+    const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
+      method: 'POST',
+      body: formData
+    });
+    
+    // Check if we got the expected 500 error (which means pass for now)
+    if (screenDetectResponse.status === 500) {
+      const errorData = await screenDetectResponse.json();
+      if (errorData.detail === "Screen detection model not available") {
+        console.log("✅ Back side screen detection passed (model not available - treating as pass)");
+      } else {
+        console.log("✅ Back side screen detection returned 500, continuing...");
+      }
+    } else if (screenDetectResponse.ok) {
+      const screenData = await screenDetectResponse.json();
+      console.log("📊 Back side screen detection response:", screenData);
+      
+      // Check is_screen property
+      if (screenData.is_screen === false) {
+        console.log("✅ Back side screen detection passed - real card detected");
+        console.log(`   Confidence: ${screenData.confidence}, Prediction: ${screenData.prediction_class}`);
+      } else if (screenData.is_screen === true) {
+        console.log("❌ Back side screen detected - this appears to be a screen/photo, not physical card");
+        console.log(`   Confidence: ${screenData.confidence}, Message: ${screenData.message}`);
+        
+        // 🔦 Turn off flashlight before throwing error
+        if (disableFlashlight) {
+          await disableFlashlight();
+        }
+        
+        throw new Error('Fake card detected on back side - screen or photo detected instead of physical card');
+      } else {
+        console.warn("⚠️ is_screen property not found in response, continuing...");
+      }
+    } else {
+      console.warn("⚠️ Unexpected back side screen detection response:", screenDetectResponse.status);
+      // Continue anyway
+    }
+  } catch (screenError) {
+    if (screenError.message.includes('Fake card detected')) {
+      // Re-throw fake card errors
+      throw screenError;
+    }
+    console.error("❌ Back side screen detection error:", screenError);
+    // Continue with normal detection even if screen check fails
+  }
+  
+  // 🔦 Turn off flashlight after screen detection check
+  if (disableFlashlight) {
+    console.log("🔦 Turning off flashlight after back side screen detection");
+    await disableFlashlight();
+  }
+  
+  console.log("🔄 Continuing with normal back side card detection...");
   
   return new Promise((resolve, reject) => {
     let frameNumber = 0;

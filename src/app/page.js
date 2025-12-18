@@ -269,6 +269,55 @@ const CardDetectionApp = () => {
   }
 };
 
+  // Zoom control functions
+  const applyZoom = async (zoomLevel = 1.5) => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.zoom) {
+          const settings = track.getSettings();
+          const maxZoom = capabilities.zoom.max;
+          const minZoom = capabilities.zoom.min;
+          const targetZoom = Math.min(zoomLevel, maxZoom);
+          
+          await track.applyConstraints({
+            advanced: [{ zoom: targetZoom }]
+          });
+          console.log(`🔍 Zoom applied: ${targetZoom}x`);
+          return true;
+        } else {
+          console.log("⚠️ Zoom not supported on this device");
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error applying zoom:", error);
+      return false;
+    }
+  };
+
+  const resetZoom = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.zoom) {
+          await track.applyConstraints({
+            advanced: [{ zoom: capabilities.zoom.min || 1 }]
+          });
+          console.log("🔍 Zoom reset to normal");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error resetting zoom:", error);
+    }
+  };
+
   // Flashlight control functions
   const enableFlashlight = async () => {
     try {
@@ -283,6 +332,10 @@ const CardDetectionApp = () => {
           });
           setFlashlightEnabled(true);
           console.log("🔦 Flashlight enabled");
+          
+          // Apply zoom when flashlight is enabled
+          await applyZoom(2);
+          
           return true;
         } else {
           console.log("⚠️ Flashlight not supported on this device");
@@ -305,6 +358,9 @@ const CardDetectionApp = () => {
         });
         setFlashlightEnabled(false);
         console.log("🔦 Flashlight disabled");
+        
+        // Reset zoom when flashlight is disabled
+        await resetZoom();
       }
     } catch (error) {
       console.error("❌ Error disabling flashlight:", error);
@@ -493,8 +549,8 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FkbWluLmNhcmRuZXN0LmlvL2FwaS9tZXJjaGFudHNjYW4vZ2VuZXJhdGVUb2tlbiIsImlhdCI6MTc2NTk1OTE0MywiZXhwIjoxNzY1OTYyNzQzLCJuYmYiOjE3NjU5NTkxNDMsImp0aSI6ImMxT2Q1WWk4RU0zSTJRbzkiLCJzdWIiOiIyNzY1ODFWMzM5NDVZMjcwIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyIsInNjYW5faWQiOiJlYmE0MjM2NSIsIm1lcmNoYW50X2lkIjoiMjc2NTgxVjMzOTQ1WTI3MCIsImVuY3J5cHRpb25fa2V5IjoiRWFYYWZYYzNUdHluMGpuaiIsImZlYXR1cmVzIjpudWxsfQ.eVzyeYGVcWRzmtfRLjb-9CDLJpqOMBF-LSGOI417eNM",
-        
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYwNTI3MjYsImV4cCI6MTc2NjA1NjMyNiwibmJmIjoxNzY2MDUyNzI2LCJqdGkiOiJxQnduTGFneVpSSHk2VWc5Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.jcQye880RozH3HN1ukdwc5owxTsEIqU1ioFuQu1ejVw",
+          
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -827,8 +883,7 @@ const CardDetectionApp = () => {
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
           setDetectionActive(false);
-          // Reset attempt count on successful front scan
-          setAttemptCount(0);
+          // Don't reset attempt count here - only reset on complete success (both front and back)
           setCurrentOperation("");
           setCurrentPhase("ready-for-back");
         }
@@ -836,6 +891,15 @@ const CardDetectionApp = () => {
         console.error("Front side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Fake card detected')) {
+            console.log("🚫 Fake card detected on front side - stopping scan");
+            setErrorMessage('Fake card detected on front side. Please use an original physical card.');
+            setCurrentPhase('error');
+            setMaxAttemptsReached(true); // Block further attempts
+            return;
+          }
+          
           handleDetectionFailure(
             `Front side detection failed: ${error.message}`,
             "front"
@@ -905,8 +969,7 @@ const CardDetectionApp = () => {
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
           setDetectionActive(false);
-          // Reset attempt count on successful front scan
-          setAttemptCount(0);
+          // Don't reset attempt count here - only reset on complete success (both front and back)
           setCurrentOperation("");
           setCurrentPhase("ready-for-back");
         }
@@ -914,6 +977,15 @@ const CardDetectionApp = () => {
         console.error("Front side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Fake card detected')) {
+            console.log("🚫 Fake card detected on front side - stopping scan");
+            setErrorMessage('Fake card detected on front side. Please use an original physical card.');
+            setCurrentPhase('error');
+            setMaxAttemptsReached(true); // Block further attempts
+            return;
+          }
+          
           handleDetectionFailure(
             `Front side detection failed: ${error.message}`,
             "front"
@@ -960,6 +1032,9 @@ const CardDetectionApp = () => {
       setDetectionActive(true);
       stopRequestedRef.current = false;
 
+      // 🔦 Enable flashlight for back side scan
+      await enableFlashlight();
+
       startDetectionTimeout("Back side");
 
       try {
@@ -1001,6 +1076,15 @@ const CardDetectionApp = () => {
         console.error("Back side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Fake card detected')) {
+            console.log("🚫 Fake card detected on back side - stopping scan");
+            setErrorMessage('Fake card detected on back side. Please use an original physical card.');
+            setCurrentPhase('error');
+            setMaxAttemptsReached(true); // Block further attempts
+            return;
+          }
+          
           // For validation failures, handleDetectionFailure is already called in UseDetection
           // but we still need to handle other types of errors
           if (error.message === "Back validation failed") {
