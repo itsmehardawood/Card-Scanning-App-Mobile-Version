@@ -353,17 +353,30 @@ const CardDetectionApp = () => {
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
-        await track.applyConstraints({
-          advanced: [{ torch: false }]
-        });
-        setFlashlightEnabled(false);
-        console.log("🔦 Flashlight disabled");
+        const settings = track.getSettings();
+        
+        // Only disable if flashlight is currently enabled
+        if (settings.torch === true) {
+          await track.applyConstraints({
+            advanced: [{ torch: false }]
+          });
+          setFlashlightEnabled(false);
+          console.log("🔦 Flashlight disabled");
+        } else {
+          console.log("🔦 Flashlight already disabled, skipping");
+        }
         
         // Reset zoom when flashlight is disabled
         await resetZoom();
       }
     } catch (error) {
       console.error("❌ Error disabling flashlight:", error);
+      // Try to reset zoom even if flashlight disable failed
+      try {
+        await resetZoom();
+      } catch (zoomError) {
+        console.error("❌ Error resetting zoom:", zoomError);
+      }
     }
   };
 
@@ -821,9 +834,6 @@ const CardDetectionApp = () => {
       return;
     }
 
-    // 🔦 Enable flashlight
-    await enableFlashlight();
-
     // Initialize session ONLY if not already set
     let currentSessionId = sessionId;
     if (!currentSessionId) {
@@ -873,6 +883,9 @@ const CardDetectionApp = () => {
       setShowPromptText(false);
       setDetectionActive(true);
       stopRequestedRef.current = false;
+
+      // 🔦 Enable flashlight for front side scan
+      await enableFlashlight();
 
       // Start detection timeout
       startDetectionTimeout("Front side");
@@ -959,6 +972,9 @@ const CardDetectionApp = () => {
       setShowPromptText(false);
       setDetectionActive(true);
       stopRequestedRef.current = false;
+
+      // 🔦 Enable flashlight for front side scan
+      await enableFlashlight();
 
       // Start detection timeout
       startDetectionTimeout("Front side");
@@ -1054,7 +1070,7 @@ const CardDetectionApp = () => {
             console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}, Complete Scan: ${finalResult.complete_scan}`);
             
             // 🔦 Disable flashlight on success
-            disableFlashlight();
+            await disableFlashlight();
             
             setFinalOcrResults(finalResult);
             setCurrentPhase("back-complete");

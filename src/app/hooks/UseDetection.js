@@ -152,6 +152,13 @@ export const useDetection = (
           // 🛡️ SAFETY CHECK: Verify video and canvas are still available
           if (!videoRef.current || !canvasRef.current) {
             console.log('🛡️ Video or canvas no longer available - stopping detection gracefully');
+            
+            // If we already received success, just return without doing anything
+            if (hasReceivedSuccess || isComplete) {
+              console.log('🛡️ Already completed with success, ignoring cleanup');
+              return;
+            }
+            
             isComplete = true;
             cleanup();
             // Don't reject - just resolve with last response if available
@@ -649,6 +656,13 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
         // 🛡️ SAFETY CHECK: Verify video and canvas are still available
         if (!videoRef.current || !canvasRef.current) {
           console.log('🛡️ Video or canvas no longer available - stopping detection gracefully');
+          
+          // If we already received success, just return without doing anything
+          if (hasReceivedSuccess || isComplete) {
+            console.log('🛡️ Already completed with success, ignoring cleanup');
+            return;
+          }
+          
           isComplete = true;
           cleanup();
           // Don't reject - just resolve with last response if available
