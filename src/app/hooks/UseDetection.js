@@ -14,7 +14,8 @@ export const useDetection = (
   setFrontScanState,
   stopRequestedRef,
   handleDetectionFailure, // Add this parameter for validation failures
-  disableFlashlight // Add this parameter to control flashlight
+  disableFlashlight, // Add this parameter to control flashlight
+  onImageCaptured // Add callback to pass captured image immediately
 ) => {
   const captureIntervalRef = useRef(null);
 
@@ -36,18 +37,32 @@ export const useDetection = (
       throw new Error('Video not ready for capture');
     }
     
-    // STEP 1: Screen Detection Check (Single Frame)
+    // STEP 1: Capture frame FIRST (before screen detection) to ensure refs are available
+    console.log("📸 Capturing static frame for screen detection...");
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    
+    if (!video || !canvas) {
+      throw new Error('Video or canvas not available for capture');
+    }
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    
+    // Create blob for screen detection
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    
+    // Also create data URL for display (but don't send yet - wait for screen detection)
+    const capturedImageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    console.log("✅ Static frame captured");
+    
+    // STEP 2: Screen Detection Check (using the captured frame)
     console.log("📱 Starting screen detection check...");
+    let screenDetectionPassed = false;
+    
     try {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-      
       const formData = new FormData();
       formData.append('file', blob, 'screen_check.jpg');
       
@@ -62,8 +77,10 @@ export const useDetection = (
         const errorData = await screenDetectResponse.json();
         if (errorData.detail === "Screen detection model not available") {
           console.log("✅ Screen detection passed (model not available - treating as pass)");
+          screenDetectionPassed = true;
         } else {
           console.log("✅ Screen detection returned 500, continuing...");
+          screenDetectionPassed = true;
         }
       } else if (screenDetectResponse.ok) {
         const screenData = await screenDetectResponse.json();
@@ -73,6 +90,7 @@ export const useDetection = (
         if (screenData.is_screen === false) {
           console.log("✅ Front side screen detection passed - real card detected");
           console.log(`   Confidence: ${screenData.confidence}, Prediction: ${screenData.prediction_class}`);
+          screenDetectionPassed = true;
         } else if (screenData.is_screen === true) {
           console.log("❌ Front side screen detected - this appears to be a screen/photo, not physical card");
           console.log(`   Confidence: ${screenData.confidence}, Message: ${screenData.message}`);
@@ -85,10 +103,11 @@ export const useDetection = (
           throw new Error('Fake card detected on front side - screen or photo detected instead of physical card');
         } else {
           console.warn("⚠️ is_screen property not found in response, continuing...");
+          screenDetectionPassed = true; // Continue anyway
         }
       } else {
         console.warn("⚠️ Unexpected screen detection response:", screenDetectResponse.status);
-        // Continue anyway
+        screenDetectionPassed = true; // Continue anyway
       }
     } catch (screenError) {
       if (screenError.message.includes('Fake card detected')) {
@@ -97,38 +116,46 @@ export const useDetection = (
       }
       console.error("❌ Screen detection error:", screenError);
       // Continue with normal detection even if screen check fails
+      screenDetectionPassed = true;
     }
     
-    // 🔦 Turn off flashlight after screen detection check
-    if (disableFlashlight) {
-      console.log("🔦 Turning off flashlight after screen detection");
-      await disableFlashlight();
+    // STEP 3: Only show static image AFTER screen detection passes
+    if (screenDetectionPassed && onImageCaptured) {
+      onImageCaptured(capturedImageDataUrl);
+      console.log("📤 Screen detection passed - captured image sent to parent component for display");
     }
+  
+  // 🔦 Turn off flashlight after screen detection completes
+  if (disableFlashlight) {
+    console.log("🔦 Turning off flashlight after screen detection");
+    await disableFlashlight();
+  }
+  
+  console.log("🔄 Continuing with normal card detection using captured frame...");
+  
+  return new Promise((resolve, reject) => {
+    let frameNumber = 0;
+    let timeoutId = null;
+    let isComplete = false;
+    let hasReceivedSuccess = false; // NEW: Track if we've already received success
+    let maxFramesReachedTime = null; // Track when we reached 10 frames
+    let lastApiResponse = null; // Track last response
+    let successfulFramesCount = 0; // NEW: Track how many frames succeeded in THIS attempt
+    let capturedFrameBlob = null; // Store the captured frame blob for API calls
     
-    console.log("🔄 Continuing with normal card detection...");
+    const cleanup = () => {
+      if (captureIntervalRef.current) {
+        clearInterval(captureIntervalRef.current);
+        captureIntervalRef.current = null;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      setIsProcessing(false);
+    };
     
-    return new Promise((resolve, reject) => {
-      let frameNumber = 0;
-      let timeoutId = null;
-      let isComplete = false;
-      let hasReceivedSuccess = false; // NEW: Track if we've already received success
-      let maxFramesReachedTime = null; // Track when we reached 10 frames
-      let lastApiResponse = null; // Track last response
-      let successfulFramesCount = 0; // NEW: Track how many frames succeeded in THIS attempt
-      
-      const cleanup = () => {
-        if (captureIntervalRef.current) {
-          clearInterval(captureIntervalRef.current);
-          captureIntervalRef.current = null;
-        }
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        setIsProcessing(false);
-      };
-      
-      const processFrame = async () => {
+    const processFrame = async () => {
         try {
           // 🛑 FIRST CHECK: Stop immediately if success already received
           if (hasReceivedSuccess) {
@@ -170,7 +197,23 @@ export const useDetection = (
             return;
           }
           
-          const frame = await captureFrame(videoRef, canvasRef);
+          // 📸 Use captured static frame instead of capturing new frames
+          let frame;
+          if (!capturedFrameBlob) {
+            // First frame - capture and store it
+            const canvas = canvasRef.current;
+            const video = videoRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            capturedFrameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            frame = capturedFrameBlob;
+            console.log('📸 Captured and stored static frame for API calls');
+          } else {
+            // Reuse the same captured frame
+            frame = capturedFrameBlob;
+          }
           
           if (frame && frame.size > 0) {
             frameNumber++;
@@ -196,7 +239,8 @@ export const useDetection = (
                 isComplete = true;
                 cleanup();
                 setCurrentPhase('results');
-                resolve(apiResponse);
+                // Include captured image in response
+                resolve({ ...apiResponse, capturedImage: capturedImageDataUrl });
                 return;
               }
               
@@ -535,18 +579,32 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
     throw new Error('Video not ready for capture');
   }
   
-  // STEP 1: Screen Detection Check for BACK side (Single Frame)
+  // STEP 1: Capture frame FIRST (before screen detection) to ensure refs are available
+  console.log("📸 Capturing static frame for back side screen detection...");
+  const canvas = canvasRef.current;
+  const video = videoRef.current;
+  
+  if (!video || !canvas) {
+    throw new Error('Video or canvas not available for back side capture');
+  }
+  
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  
+  // Create blob for screen detection
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+  
+  // Also create data URL for display (but don't send yet - wait for screen detection)
+  const capturedBackImageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+  console.log("✅ Static frame captured for back side");
+  
+  // STEP 2: Screen Detection Check for BACK side (using the captured frame)
   console.log("📱 Starting screen detection check for BACK side...");
+  let backScreenDetectionPassed = false;
+  
   try {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-    
     const formData = new FormData();
     formData.append('file', blob, 'back_screen_check.jpg');
     
@@ -561,8 +619,10 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
       const errorData = await screenDetectResponse.json();
       if (errorData.detail === "Screen detection model not available") {
         console.log("✅ Back side screen detection passed (model not available - treating as pass)");
+        backScreenDetectionPassed = true;
       } else {
         console.log("✅ Back side screen detection returned 500, continuing...");
+        backScreenDetectionPassed = true;
       }
     } else if (screenDetectResponse.ok) {
       const screenData = await screenDetectResponse.json();
@@ -572,6 +632,7 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
       if (screenData.is_screen === false) {
         console.log("✅ Back side screen detection passed - real card detected");
         console.log(`   Confidence: ${screenData.confidence}, Prediction: ${screenData.prediction_class}`);
+        backScreenDetectionPassed = true;
       } else if (screenData.is_screen === true) {
         console.log("❌ Back side screen detected - this appears to be a screen/photo, not physical card");
         console.log(`   Confidence: ${screenData.confidence}, Message: ${screenData.message}`);
@@ -584,10 +645,11 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
         throw new Error('Fake card detected on back side - screen or photo detected instead of physical card');
       } else {
         console.warn("⚠️ is_screen property not found in response, continuing...");
+        backScreenDetectionPassed = true; // Continue anyway
       }
     } else {
       console.warn("⚠️ Unexpected back side screen detection response:", screenDetectResponse.status);
-      // Continue anyway
+      backScreenDetectionPassed = true; // Continue anyway
     }
   } catch (screenError) {
     if (screenError.message.includes('Fake card detected')) {
@@ -596,36 +658,44 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
     }
     console.error("❌ Back side screen detection error:", screenError);
     // Continue with normal detection even if screen check fails
+    backScreenDetectionPassed = true;
   }
   
-  // 🔦 Turn off flashlight after screen detection check
-  if (disableFlashlight) {
-    console.log("🔦 Turning off flashlight after back side screen detection");
-    await disableFlashlight();
+  // STEP 3: Only show static image AFTER screen detection passes
+  if (backScreenDetectionPassed && onImageCaptured) {
+    onImageCaptured(capturedBackImageDataUrl);
+    console.log("📤 Back side screen detection passed - captured image sent to parent component for display");
   }
+
+// 🔦 Turn off flashlight after screen detection completes
+if (disableFlashlight) {
+  console.log("🔦 Turning off flashlight after back side screen detection");
+  await disableFlashlight();
+}
+
+console.log("🔄 Continuing with normal back side card detection using captured frame...");
+
+return new Promise((resolve, reject) => {
+  let frameNumber = 0;
+  let timeoutId = null;
+  let isComplete = false;
+  let hasReceivedSuccess = false; // NEW: Track if we've already received success
+  let maxFramesReachedTime = null; // Track when we reached 10 frames
+  let lastApiResponse = null; // Track last response
+  let successfulFramesCount = 0; // NEW: Track how many frames succeeded in THIS attempt
+  let capturedBackFrameBlob = null; // Store the captured back frame blob for API calls
   
-  console.log("🔄 Continuing with normal back side card detection...");
-  
-  return new Promise((resolve, reject) => {
-    let frameNumber = 0;
-    let timeoutId = null;
-    let isComplete = false;
-    let hasReceivedSuccess = false; // NEW: Track if we've already received success
-    let maxFramesReachedTime = null; // Track when we reached 10 frames
-    let lastApiResponse = null; // Track last response
-    let successfulFramesCount = 0; // NEW: Track how many frames succeeded in THIS attempt
-    
-    const cleanup = () => {
-      if (captureIntervalRef.current) {
-        clearInterval(captureIntervalRef.current);
-        captureIntervalRef.current = null;
-      }
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      setIsProcessing(false);
-    };
+  const cleanup = () => {
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    setIsProcessing(false);
+  };
     
     const processFrame = async () => {
       try {
@@ -674,7 +744,23 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
           return;
         }
         
-        const frame = await captureFrame(videoRef, canvasRef);
+        // 📸 Use captured static frame for back side instead of capturing new frames
+        let frame;
+        if (!capturedBackFrameBlob) {
+          // First frame - capture and store it
+          const canvas = canvasRef.current;
+          const video = videoRef.current;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0);
+          capturedBackFrameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+          frame = capturedBackFrameBlob;
+          console.log('📸 Captured and stored static frame for back side API calls');
+        } else {
+          // Reuse the same captured frame
+          frame = capturedBackFrameBlob;
+        }
         
         // Check again after async frame capture to prevent race conditions
         if (isComplete || stopRequestedRef.current) return;
@@ -702,7 +788,8 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
               hasReceivedSuccess = true; // Mark success as received
               isComplete = true;
               cleanup();
-              resolve(apiResponse);
+              // Include captured image in response
+              resolve({ ...apiResponse, capturedImage: capturedBackImageDataUrl });
               return;
             }
             

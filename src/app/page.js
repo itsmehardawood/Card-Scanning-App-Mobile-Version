@@ -79,6 +79,9 @@ const CardDetectionApp = () => {
     motionPromptTimestamp: null,
   });
 
+  // Captured image state for displaying static frame during scanning
+  const [capturedImage, setCapturedImage] = useState(null);
+
   // Flashlight state
   const [flashlightEnabled, setFlashlightEnabled] = useState(false);
 
@@ -98,12 +101,13 @@ const CardDetectionApp = () => {
   const stopRequestedRef = useRef(false);
   const detectionTimeoutRef = useRef(null);
   const currentSessionRef = useRef(null);
+  const backSuccessReceivedRef = useRef(false); // Track if back success already received to prevent double processing
 
   const fetchMerchantDisplayInfo = async (merchantId) => {
     if (!merchantId) {
       console.log("🚫 No merchantId provided to fetchMerchantDisplayInfo");
       return;
-    }
+    } 
 
     try {
       console.log("🔍 Fetching merchant display info for:", merchantId);
@@ -182,15 +186,7 @@ const CardDetectionApp = () => {
 
 
 
-  // Helper function to send logs to server
-
-
-  // Device info is now handled in webview-entry POST endpoint
-  // Android sends device_info directly in the POST request
-  // No bridge polling needed anymore! 
-
-
-
+ 
 
 
 
@@ -460,7 +456,8 @@ const CardDetectionApp = () => {
     setFrontScanState,
     stopRequestedRef,
     handleDetectionFailure, // ADD THIS PARAMETER
-    disableFlashlight // Pass flashlight control function
+    disableFlashlight, // Pass flashlight control function
+    setCapturedImage // Pass callback to receive captured image immediately
   );
 
   // Check for authentication data on component mount
@@ -563,7 +560,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYwNTY0MTksImV4cCI6MTc2NjA2MDAxOSwibmJmIjoxNzY2MDU2NDE5LCJqdGkiOiJqTGVqU0ROZVhseGxHeUZVIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.69JEZ-phUp85jBcOhJX4BlpS_9RGSZQs6EhaSpDbK9c",
+          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYxNDEyNzksImV4cCI6MTc2NjE0NDg3OSwibmJmIjoxNzY2MTQxMjc5LCJqdGkiOiJURjB1b1B2RTdKUXpXVFY2Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.-yq7LrSxvf9E3kXd-exaU5HaGaX4WCGC40yUDoDnkIg",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -777,6 +774,7 @@ const CardDetectionApp = () => {
     setDetectionActive(false);
     setIsProcessing(false);
     setCountdown(0);
+    setCapturedImage(null); // Clear captured image
     
     // Hide prompt text when stopping
     setShowPromptText(false);
@@ -891,7 +889,12 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront("front", currentSessionId);
+        
+        // Store captured image for display
+        if (apiResponse?.capturedImage) {
+          setCapturedImage(apiResponse.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
@@ -980,7 +983,12 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront("front", currentSessionId);
+        
+        // Store captured image for display
+        if (apiResponse?.capturedImage) {
+          setCapturedImage(apiResponse.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
@@ -1031,12 +1039,18 @@ const CardDetectionApp = () => {
     }
     console.log('🆔 Using session ID for back scan:', sessionId);
 
+    // 🔄 Clear the front side captured image so user sees live video during flashlight phase
+    setCapturedImage(null);
+
     // Show prompt text for back side positioning
     setPromptText("Position your card's back side in the camera square frame for security scan");
     setShowPromptText(true);
 
     setCurrentPhase("back-countdown");
     setErrorMessage("");
+
+    // Reset back success flag at start of back detection
+    backSuccessReceivedRef.current = false;
 
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
@@ -1055,6 +1069,17 @@ const CardDetectionApp = () => {
 
       try {
         const finalResult = await captureAndSendFrames("back", sessionId);
+        
+        // 🛡️ CRITICAL: If success was already received, ignore this result completely
+        if (backSuccessReceivedRef.current) {
+          console.log("🛡️ Back success already received, ignoring subsequent result:", finalResult?.status);
+          return;
+        }
+        
+        // Store captured image for display
+        if (finalResult?.capturedImage) {
+          setCapturedImage(finalResult.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
@@ -1064,6 +1089,10 @@ const CardDetectionApp = () => {
 
           // 🎯 PRIORITY FIX: Match the hook's success logic - status "success" OR "already_completed" is sufficient
           if (finalResult?.status === "success" || finalResult?.status === "already_completed") {
+            // 🛡️ CRITICAL: Mark success received IMMEDIATELY to prevent any subsequent processing
+            backSuccessReceivedRef.current = true;
+            stopRequestedRef.current = true; // Also stop any further detection
+            
             console.log(
               "✅ SUCCESS/ALREADY_COMPLETED STATUS received in page.js - transitioning to 'results'"
             );
@@ -1082,6 +1111,11 @@ const CardDetectionApp = () => {
               setCurrentPhase("results");
             }, 1000);
           } else {
+            // 🛡️ Double check - if success was already received, don't process failure
+            if (backSuccessReceivedRef.current) {
+              console.log("🛡️ Back success already received, ignoring failure path");
+              return;
+            }
             console.log(
               "⚠️ Scan result didn't meet success criteria"
             );
@@ -1089,6 +1123,12 @@ const CardDetectionApp = () => {
           }
         }
       } catch (error) {
+        // 🛡️ CRITICAL: If success was already received, ignore any errors
+        if (backSuccessReceivedRef.current) {
+          console.log("🛡️ Back success already received, ignoring error:", error.message);
+          return;
+        }
+        
         console.error("Back side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
@@ -1121,6 +1161,7 @@ const CardDetectionApp = () => {
 
   const resetApplication = () => {
     stopRequestedRef.current = true;
+    backSuccessReceivedRef.current = false; // Reset back success flag
     clearDetectionTimeout();
 
     setCurrentPhase("idle");
@@ -1130,6 +1171,7 @@ const CardDetectionApp = () => {
     setCountdown(0);
     setErrorMessage("");
     setSessionId("");
+    setCapturedImage(null); // Clear captured image
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1170,6 +1212,7 @@ const CardDetectionApp = () => {
     
     // CRITICAL: Stop all detection immediately
     stopRequestedRef.current = true;
+    backSuccessReceivedRef.current = false; // Reset back success flag
     clearDetectionTimeout();
 
     // Clean up intervals FIRST
@@ -1187,6 +1230,7 @@ const CardDetectionApp = () => {
     setIsProcessing(false);
     setCountdown(0);
     setErrorMessage("");
+    setCapturedImage(null); // Clear captured image
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1373,6 +1417,7 @@ const CardDetectionApp = () => {
           isProcessing={isProcessing}
           showPromptText={showPromptText}
           promptText={promptText}
+          capturedImage={capturedImage}
         />
 
         <ControlPanel

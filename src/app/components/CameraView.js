@@ -10,6 +10,7 @@ const CameraView = ({
   isProcessing,
   showPromptText,
   promptText,
+  capturedImage, // Add captured image prop
 }) => {
   const [showMotionPrompt, setShowMotionPrompt] = useState(false);
   const [motionPromptShown, setMotionPromptShown] = useState(false);
@@ -125,16 +126,27 @@ const CameraView = ({
   return (
     <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
       <div className="relative overflow-hidden">
-        {/* Camera Video */}
+        {/* Camera Video - ALWAYS rendered to keep ref valid, but hidden when showing captured image */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
+          className={`w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover ${
+            capturedImage && (currentPhase === 'front' || currentPhase === 'back') ? 'hidden' : ''
+          }`}
         />
+        
+        {/* Show captured static image during scanning (overlays hidden video) */}
+        {capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
+          <img
+            src={capturedImage}
+            alt="Captured card"
+            className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
+          />
+        )}
 
-        {/* Hidden Canvas */}
+        {/* Hidden Canvas - ALWAYS rendered to keep ref valid */}
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Card Frame (Thinner) */}
