@@ -151,7 +151,7 @@ const CameraView = ({
 
         {/* Card Frame (Thinner) */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative w-3/4 h-3/4">
+          <div id="card-border-frame" className="relative w-3/4 h-3/4">
             {/* 4 Corner Borders (thinner) */}
             <div className="absolute top-0 left-0 w-6 h-1 bg-white" />
             <div className="absolute top-0 left-0 w-1 h-6 bg-white" />

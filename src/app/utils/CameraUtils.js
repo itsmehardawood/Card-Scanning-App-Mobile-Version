@@ -538,7 +538,253 @@ export const resetCaptureState = () => {
   console.log('🔄 Capture state reset manually');
 };
 
-// 🔧 DIAGNOSTIC UTILITIES
+// � FRAME CROPPING UTILITIES
+
+/**
+ * Get the crop coordinates for the card border area
+ * Maps the white border position to video coordinates
+ */
+export const getCropCoordinates = (videoRef) => {
+  try {
+    const video = videoRef.current;
+    const borderElement = document.getElementById('card-border-frame');
+    
+    if (!video || !borderElement) {
+      console.warn('⚠️ Video or border element not found');
+      return null;
+    }
+
+    // Get video element's position and size on screen
+    const videoRect = video.getBoundingClientRect();
+    
+    // Get border element's position and size on screen
+    const borderRect = borderElement.getBoundingClientRect();
+    
+    // Validate that elements have dimensions
+    if (videoRect.width === 0 || videoRect.height === 0) {
+      console.warn('⚠️ Video element has no screen dimensions:', videoRect);
+      return null;
+    }
+    
+    if (borderRect.width === 0 || borderRect.height === 0) {
+      console.warn('⚠️ Border element has no screen dimensions:', borderRect);
+      return null;
+    }
+    
+    // Calculate border position relative to video element (in screen pixels)
+    const relativeX = borderRect.left - videoRect.left;
+    const relativeY = borderRect.top - videoRect.top;
+    const relativeWidth = borderRect.width;
+    const relativeHeight = borderRect.height;
+    
+    // Validate relative position is within video bounds
+    if (relativeX < 0 || relativeY < 0 || 
+        relativeX >= videoRect.width || relativeY >= videoRect.height) {
+      console.warn('⚠️ Border is outside video element bounds:', {
+        relativeX, relativeY, videoRect
+      });
+      return null;
+    }
+    
+    // Get actual video dimensions (native resolution)
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    
+    if (videoWidth === 0 || videoHeight === 0) {
+      console.warn('⚠️ Video has no native dimensions:', { videoWidth, videoHeight });
+      return null;
+    }
+    
+    // Calculate scale factors (screen pixels to video pixels)
+    const scaleX = videoWidth / videoRect.width;
+    const scaleY = videoHeight / videoRect.height;
+    
+    // Map border coordinates to video coordinates
+    const cropX = Math.round(relativeX * scaleX);
+    const cropY = Math.round(relativeY * scaleY);
+    const cropWidth = Math.round(relativeWidth * scaleX);
+    const cropHeight = Math.round(relativeHeight * scaleY);
+    
+    // Ensure crop area is within video bounds and has positive dimensions
+    const finalCropX = Math.max(0, Math.min(cropX, videoWidth - 1));
+    const finalCropY = Math.max(0, Math.min(cropY, videoHeight - 1));
+    const finalCropWidth = Math.max(1, Math.min(cropWidth, videoWidth - finalCropX));
+    const finalCropHeight = Math.max(1, Math.min(cropHeight, videoHeight - finalCropY));
+    
+    console.log('📐 Crop coordinates calculated:', {
+      screen: { x: relativeX, y: relativeY, w: relativeWidth, h: relativeHeight },
+      video: { width: videoWidth, height: videoHeight },
+      scale: { x: scaleX, y: scaleY },
+      crop: { x: finalCropX, y: finalCropY, w: finalCropWidth, h: finalCropHeight }
+    });
+    
+    return {
+      x: finalCropX,
+      y: finalCropY,
+      width: finalCropWidth,
+      height: finalCropHeight
+    };
+  } catch (error) {
+    console.error('❌ Error calculating crop coordinates:', error);
+    return null;
+  }
+};
+
+/**
+ * Capture and crop frame to only the card border area
+ * Returns both blob and data URL of the cropped image
+ */
+export const captureCroppedFrame = async (videoRef, canvasRef, debugDownload = false) => {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!videoRef.current || !canvasRef.current) {
+        reject(new Error('Video or canvas reference is null'));
+        return;
+      }
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Check if video is ready
+      if (video.readyState < 2) {
+        reject(new Error('Video not ready for capture'));
+        return;
+      }
+      
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        reject(new Error('Video has no dimensions'));
+        return;
+      }
+      
+      // Get crop coordinates
+      const cropCoords = getCropCoordinates(videoRef);
+      
+      if (!cropCoords) {
+        console.warn('⚠️ Could not get crop coordinates, using full frame');
+        // Fallback to full frame
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+      } else {
+        // Validate crop dimensions before proceeding
+        if (cropCoords.width <= 0 || cropCoords.height <= 0) {
+          console.error('❌ Invalid crop dimensions:', cropCoords);
+          reject(new Error('Invalid crop dimensions'));
+          return;
+        }
+        
+        // Set canvas to crop dimensions
+        canvas.width = cropCoords.width;
+        canvas.height = cropCoords.height;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Clear canvas first
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw only the cropped region from video
+        // ctx.drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+        ctx.drawImage(
+          video,
+          cropCoords.x,      // source x (where to start in video)
+          cropCoords.y,      // source y
+          cropCoords.width,  // source width (how much to take from video)
+          cropCoords.height, // source height
+          0,                 // destination x (where to place on canvas)
+          0,                 // destination y
+          cropCoords.width,  // destination width (canvas size)
+          cropCoords.height  // destination height
+        );
+        
+        console.log('✅ Frame cropped to card border area:', {
+          original: { w: video.videoWidth, h: video.videoHeight },
+          cropped: { w: cropCoords.width, h: cropCoords.height }
+        });
+      }
+      
+      // Validate canvas has content
+      if (canvas.width === 0 || canvas.height === 0) {
+        reject(new Error('Canvas has invalid dimensions'));
+        return;
+      }
+      
+      // Get data URL for immediate display
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      
+      // 🐛 DEBUG: Download frame for verification if requested
+      if (debugDownload) {
+        downloadDebugFrame(dataUrl, cropCoords);
+      }
+      
+      // Convert to blob for API with timeout
+      let blobCreated = false;
+      const blobTimeout = setTimeout(() => {
+        if (!blobCreated) {
+          reject(new Error('Blob creation timeout'));
+        }
+      }, 5000); // 5 second timeout
+      
+      canvas.toBlob((blob) => {
+        blobCreated = true;
+        clearTimeout(blobTimeout);
+        
+        if (blob && blob.size > 0) {
+          console.log(`✅ Cropped frame ready: ${blob.size} bytes`);
+          resolve({ blob, dataUrl, cropCoords });
+        } else {
+          reject(new Error('Failed to create blob from canvas'));
+        }
+      }, 'image/jpeg', 0.95);
+      
+    } catch (error) {
+      console.error('❌ Frame crop error:', error);
+      reject(error);
+    }
+  });
+};
+
+/**
+ * 🐛 DEBUG: Download frame to device for verification
+ * This should be removed before production deployment
+ */
+let debugFrameCount = 0;
+const MAX_DEBUG_FRAMES = 2; // Only download first 2 frames
+
+export const downloadDebugFrame = (dataUrl, cropCoords) => {
+  if (debugFrameCount >= MAX_DEBUG_FRAMES) {
+    return; // Stop after 2 frames
+  }
+  
+  debugFrameCount++;
+  
+  try {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `cropped-frame-${debugFrameCount}-${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log(`🐛 DEBUG: Downloaded frame ${debugFrameCount}/${MAX_DEBUG_FRAMES}`, cropCoords);
+    
+    if (debugFrameCount === MAX_DEBUG_FRAMES) {
+      console.log('🐛 DEBUG: Maximum debug frames reached. No more downloads will occur.');
+    }
+  } catch (error) {
+    console.error('❌ Error downloading debug frame:', error);
+  }
+};
+
+/**
+ * Reset debug frame counter (call this when starting a new scan session)
+ */
+export const resetDebugFrameCount = () => {
+  debugFrameCount = 0;
+  console.log('🔄 Debug frame counter reset');
+};
+
+// �🔧 DIAGNOSTIC UTILITIES
 export const getCameraDiagnostics = async () => {
   const info = {
     isWebView: isWebView(),

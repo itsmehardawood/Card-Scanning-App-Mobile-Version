@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { sendFrameToAPI } from '../utils/apiService';
-import { captureFrame } from '../utils/CameraUtils';
+import { captureFrame, captureCroppedFrame, resetDebugFrameCount } from '../utils/CameraUtils';
 // new flow branch with new same  session id for all retries
 // Custom hook for detection logic
 export const useDetection = (
@@ -37,28 +37,24 @@ export const useDetection = (
       throw new Error('Video not ready for capture');
     }
     
-    // STEP 1: Capture frame FIRST (before screen detection) to ensure refs are available
-    console.log("📸 Capturing static frame for screen detection...");
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
+    // 🐛 DEBUG: Reset debug frame counter at start of front scan
+    resetDebugFrameCount();
     
-    if (!video || !canvas) {
-      throw new Error('Video or canvas not available for capture');
-    }
+    // STEP 1: Capture and crop frame to card border area FIRST
+    console.log("📸 Capturing and cropping frame to card border area...");
     
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
+    // Enable debug download for first 2 frames (set to false before production)
+    const DEBUG_DOWNLOAD = false; // 🐛 TODO: Set to false before deploying
     
-    // Create blob for screen detection
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    const { blob, dataUrl: capturedImageDataUrl, cropCoords } = await captureCroppedFrame(
+      videoRef, 
+      canvasRef,
+      DEBUG_DOWNLOAD // Download first 2 frames for verification
+    );
     
-    // Also create data URL for display (but don't send yet - wait for screen detection)
-    const capturedImageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    console.log("✅ Static frame captured");
+    console.log("✅ Cropped frame captured:", cropCoords);
     
-    // STEP 2: Screen Detection Check (using the captured frame)
+    // STEP 2: Screen Detection Check (using the cropped frame)
     console.log("📱 Starting screen detection check...");
     let screenDetectionPassed = false;
     
@@ -66,7 +62,7 @@ export const useDetection = (
       const formData = new FormData();
       formData.append('file', blob, 'screen_check.jpg');
       
-      console.log("📤 Sending frame to screen detection endpoint...");
+      console.log("📤 Sending cropped frame to screen detection endpoint...");
       const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
         method: 'POST',
         body: formData
@@ -200,16 +196,12 @@ export const useDetection = (
           // 📸 Use captured static frame instead of capturing new frames
           let frame;
           if (!capturedFrameBlob) {
-            // First frame - capture and store it
-            const canvas = canvasRef.current;
-            const video = videoRef.current;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
-            capturedFrameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            // First frame - capture and store it with cropping
+            const DEBUG_DOWNLOAD = false; // TODO: Set to false before deploying
+            const { blob } = await captureCroppedFrame(videoRef, canvasRef, DEBUG_DOWNLOAD);
+            capturedFrameBlob = blob;
             frame = capturedFrameBlob;
-            console.log('📸 Captured and stored static frame for API calls');
+            console.log('📸 Captured and stored cropped static frame for API calls');
           } else {
             // Reuse the same captured frame
             frame = capturedFrameBlob;
@@ -579,26 +571,20 @@ const captureAndSendFrames = async (phase, providedSessionId = null) => {
     throw new Error('Video not ready for capture');
   }
   
-  // STEP 1: Capture frame FIRST (before screen detection) to ensure refs are available
-  console.log("📸 Capturing static frame for back side screen detection...");
-  const canvas = canvasRef.current;
-  const video = videoRef.current;
+  // Reset debug frame counter for back side scan
+  resetDebugFrameCount();
   
-  if (!video || !canvas) {
-    throw new Error('Video or canvas not available for back side capture');
-  }
+  // STEP 1: Capture cropped frame FIRST (before screen detection) to ensure refs are available
+  console.log("📸 Capturing cropped static frame for back side screen detection...");
+  const DEBUG_DOWNLOAD = false; // TODO: Set to false before deploying
   
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0);
+  const { blob, dataUrl: capturedBackImageDataUrl, cropCoords } = await captureCroppedFrame(
+    videoRef,
+    canvasRef,
+    DEBUG_DOWNLOAD
+  );
   
-  // Create blob for screen detection
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-  
-  // Also create data URL for display (but don't send yet - wait for screen detection)
-  const capturedBackImageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-  console.log("✅ Static frame captured for back side");
+  console.log("✅ Cropped static frame captured for back side", cropCoords);
   
   // STEP 2: Screen Detection Check for BACK side (using the captured frame)
   console.log("📱 Starting screen detection check for BACK side...");
@@ -744,17 +730,13 @@ return new Promise((resolve, reject) => {
           return;
         }
         
-        // 📸 Use captured static frame for back side instead of capturing new frames
+        // 📸 Use captured static cropped frame for back side instead of capturing new frames
         let frame;
         if (!capturedBackFrameBlob) {
-          // First frame - capture and store it
-          const canvas = canvasRef.current;
-          const video = videoRef.current;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0);
-          capturedBackFrameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+          // First frame - capture and store it with cropping
+          const DEBUG_DOWNLOAD = false; // TODO: Set to false before deploying
+          const { blob } = await captureCroppedFrame(videoRef, canvasRef, DEBUG_DOWNLOAD);
+          capturedBackFrameBlob = blob;
           frame = capturedBackFrameBlob;
           console.log('📸 Captured and stored static frame for back side API calls');
         } else {

@@ -448,7 +448,7 @@ const CardDetectionApp = () => {
     // Auto-hide message after 4 seconds
     setTimeout(() => {
       setShowCaptureSuccessMessage(false);
-    }, 4000);
+    }, 5000);
   };
 
   // Custom hook for detection logic - NOW WITH handleDetectionFailure parameter
@@ -571,8 +571,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYxNDQ5NzYsImV4cCI6MTc2NjE0ODU3NiwibmJmIjoxNzY2MTQ0OTc2LCJqdGkiOiI0WEE0aHh1VzRaMDZ0SER2Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.qxfL0H5M8o2gaKyBm2dW_9TBNJ6Xj-6yQ__vtkZG7qA",
-          
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYxNDkzMTksImV4cCI6MTc2NjE1MjkxOSwibmJmIjoxNzY2MTQ5MzE5LCJqdGkiOiIyRk05cEJCemRjMm5DTG01Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.v-k6cv47MpDiCIuZqY1qlPBwnJBmreHkejzzuxp2ZW8",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -1362,7 +1361,7 @@ const CardDetectionApp = () => {
       <div className="container mx-auto max-w-4xl">
         {/* Debug info (only shows in development) */}
         <div className="flex items-center justify-center bg-white p-2 sm:p-4 rounded-md mb-4 sm:mb-8 shadow">
-          {merchantLogo && (
+          {/* {merchantLogo && (
             <img
               // width={50}
               // height={50}
@@ -1370,9 +1369,11 @@ const CardDetectionApp = () => {
               alt="Merchant Logo"
               className=" h-15 w-15 object-contain mr-3"
             />
-          )}
+          )} */}
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-            {merchantName || "Card Security Scan"}
+            {/* {merchantName || "Card Security Scan"} */}
+                        {"Card Security Scan"}
+
           </h1>
         </div>
 
