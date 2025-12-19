@@ -22,7 +22,8 @@ const ControlPanel = ({
   isProcessing,
   attemptCount,
   maxAttempts,
-  maxAttemptsReached
+  maxAttemptsReached,
+  showCaptureSuccessMessage
 }) => {
   const isActive = detectionActive || isProcessing || countdown > 0;
   const isLastAttempt = attemptCount === maxAttempts - 1;
@@ -47,6 +48,39 @@ const ControlPanel = ({
     );
   }
 
+  // Capture success message - show when frame is captured successfully
+  if (showCaptureSuccessMessage) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="text-center">
+          <div className="mb-4">
+            {/* Success Icon */}
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+              <svg 
+                className="w-10 h-10 text-green-600" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={3} 
+                  d="M5 13l4 4L19 7" 
+                />
+              </svg>
+            </div>
+            
+            <h3 className="text-lg sm:text-xl font-semibold text-green-600 mb-2">Frame Captured Successfully!</h3>
+            <p className="text-gray-700 mb-3">
+              Your card frame has been captured successfully. We will now proceed with an intelligence security scan.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Fake card detected - show retry option without counting as failed attempt
   if (currentPhase === 'fake-card-error') {
     return (
@@ -56,16 +90,7 @@ const ControlPanel = ({
             <h3 className="text-lg sm:text-xl font-semibold text-red-600 mb-2">Fake Card Detected</h3>
             <p className="text-red-700 mb-3">{errorMessage || 'Please use an original physical card.'}</p>
             
-            {/* <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-red-600 text-sm font-medium">
-                {fakeCardDetectedPhase === 'front' 
-                  ? 'Fake card detected on front side' 
-                  : 'Fake card detected on back side'}
-              </p>
-              <p className="text-gray-600 text-sm mt-2">
-                Please ensure you are using an original, physical card and try again.
-              </p>
-            </div> */}
+           
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">

@@ -81,6 +81,7 @@ const CardDetectionApp = () => {
 
   // Captured image state for displaying static frame during scanning
   const [capturedImage, setCapturedImage] = useState(null);
+  const [showCaptureSuccessMessage, setShowCaptureSuccessMessage] = useState(false);
 
   // Flashlight state
   const [flashlightEnabled, setFlashlightEnabled] = useState(false);
@@ -440,6 +441,16 @@ const CardDetectionApp = () => {
     }
   };
 
+  // Wrapper function to handle captured image and show success message
+  const handleCapturedImage = (imageDataUrl) => {
+    setCapturedImage(imageDataUrl);
+    setShowCaptureSuccessMessage(true);
+    // Auto-hide message after 4 seconds
+    setTimeout(() => {
+      setShowCaptureSuccessMessage(false);
+    }, 4000);
+  };
+
   // Custom hook for detection logic - NOW WITH handleDetectionFailure parameter
   const {
     captureAndSendFramesFront,
@@ -457,7 +468,7 @@ const CardDetectionApp = () => {
     stopRequestedRef,
     handleDetectionFailure, // ADD THIS PARAMETER
     disableFlashlight, // Pass flashlight control function
-    setCapturedImage // Pass callback to receive captured image immediately
+    handleCapturedImage // Pass callback to receive captured image immediately
   );
 
   // Check for authentication data on component mount
@@ -560,7 +571,8 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYxNDEyNzksImV4cCI6MTc2NjE0NDg3OSwibmJmIjoxNzY2MTQxMjc5LCJqdGkiOiJURjB1b1B2RTdKUXpXVFY2Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.-yq7LrSxvf9E3kXd-exaU5HaGaX4WCGC40yUDoDnkIg",
+          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYxNDQ5NzYsImV4cCI6MTc2NjE0ODU3NiwibmJmIjoxNzY2MTQ0OTc2LCJqdGkiOiI0WEE0aHh1VzRaMDZ0SER2Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.qxfL0H5M8o2gaKyBm2dW_9TBNJ6Xj-6yQ__vtkZG7qA",
+          
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -775,6 +787,7 @@ const CardDetectionApp = () => {
     setIsProcessing(false);
     setCountdown(0);
     setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Hide prompt text when stopping
     setShowPromptText(false);
@@ -910,7 +923,7 @@ const CardDetectionApp = () => {
           // Check for fake card detection error
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
-            setErrorMessage('Fake card detected on front side. Please use an original physical card.');
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
             setFakeCardDetectedPhase('front');
             return;
@@ -1004,7 +1017,7 @@ const CardDetectionApp = () => {
           // Check for fake card detection error
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
-            setErrorMessage('Fake card detected on front side. Please use an original physical card.');
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
             setFakeCardDetectedPhase('front');
             return;
@@ -1041,6 +1054,7 @@ const CardDetectionApp = () => {
 
     // 🔄 Clear the front side captured image so user sees live video during flashlight phase
     setCapturedImage(null);
+    setShowCaptureSuccessMessage(false); // Clear success message
 
     // Show prompt text for back side positioning
     setPromptText("Position your card's back side in the camera square frame for security scan");
@@ -1135,7 +1149,7 @@ const CardDetectionApp = () => {
           // Check for fake card detection error
           if (error.message && error.message.includes('Fake card detected')) {
             console.log("🚫 Fake card detected on back side - stopping scan");
-            setErrorMessage('Fake card detected on back side. Please use an original physical card.');
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
             setFakeCardDetectedPhase('back');
             return;
@@ -1172,6 +1186,7 @@ const CardDetectionApp = () => {
     setErrorMessage("");
     setSessionId("");
     setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1231,6 +1246,7 @@ const CardDetectionApp = () => {
     setCountdown(0);
     setErrorMessage("");
     setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1440,6 +1456,7 @@ const CardDetectionApp = () => {
           attemptCount={attemptCount}
           maxAttempts={MAX_ATTEMPTS}
           maxAttemptsReached={maxAttemptsReached}
+          showCaptureSuccessMessage={showCaptureSuccessMessage}
         />
 
         <StatusInformation
