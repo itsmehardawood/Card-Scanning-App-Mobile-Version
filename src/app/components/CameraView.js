@@ -11,6 +11,7 @@ const CameraView = ({
   showPromptText,
   promptText,
   capturedImage, // Add captured image prop
+  showCaptureSuccessMessage, // Add prop to control success message display
 }) => {
   const [showMotionPrompt, setShowMotionPrompt] = useState(false);
   const [motionPromptShown, setMotionPromptShown] = useState(false);
@@ -144,6 +145,35 @@ const CameraView = ({
             alt="Captured card"
             className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
           />
+        )}
+
+        {/* Success Message Overlay - Show on top of captured image */}
+        {showCaptureSuccessMessage && capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
+          <div className="absolute inset-0 flex items-center justify-center z-35">
+            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 mx-4 max-w-md text-center shadow-lg border-2 border-green-500">
+              {/* Success Icon */}
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+                <svg 
+                  className="w-10 h-10 text-green-600" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={3} 
+                    d="M5 13l4 4L19 7" 
+                  />
+                </svg>
+              </div>
+              
+              <h3 className="text-lg font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
+              <p className="text-gray-200 text-sm leading-relaxed">
+                Your card frame has been captured successfully. We will now proceed with an intelligence security scan.
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Hidden Canvas - ALWAYS rendered to keep ref valid */}
