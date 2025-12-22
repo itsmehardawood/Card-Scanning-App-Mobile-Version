@@ -150,9 +150,9 @@ const CameraView = ({
         {/* Success Message Overlay - Show on top of captured image */}
         {showCaptureSuccessMessage && capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
           <div className="absolute inset-0 flex items-center justify-center z-35">
-            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-6 mx-4 max-w-md text-center shadow-lg border-2 border-green-500">
+            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-4 mx-3 max-w-md text-center shadow-lg border-2 border-green-500">
               {/* Success Icon */}
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 rounded-full mb-3">
                 <svg 
                   className="w-10 h-10 text-green-600" 
                   fill="none" 
@@ -168,7 +168,7 @@ const CameraView = ({
                 </svg>
               </div>
               
-              <h3 className="text-lg font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
+              <h3 className="text-md font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
               <p className="text-gray-200 text-sm leading-relaxed">
                 Your card frame has been captured successfully. We will now proceed with an intelligence security scan.
               </p>

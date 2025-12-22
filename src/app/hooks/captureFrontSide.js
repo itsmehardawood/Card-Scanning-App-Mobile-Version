@@ -434,7 +434,7 @@ export const captureAndSendFramesFront = async (
     };
     
     processFrame();
-    captureIntervalRef = setInterval(processFrame, 1000);
+    captureIntervalRef = setInterval(processFrame, 800);
     
     timeoutId = setTimeout(() => {
       if (!isComplete) {
