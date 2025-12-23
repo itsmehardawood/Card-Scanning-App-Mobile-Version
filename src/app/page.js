@@ -571,8 +571,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjYzOTA5NjAsImV4cCI6MTc2NjM5NDU2MCwibmJmIjoxNzY2MzkwOTYwLCJqdGkiOiJMdUVWUlVWS28ybFlPTkhNIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.LGD4HDqF9PGu8jkjKaeZMkfa96q-z2yZ5Id-WxNUou8",
-          
+          authToken:"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjY0Nzc3MDksImV4cCI6MTc2NjQ4MTMwOSwibmJmIjoxNzY2NDc3NzA5LCJqdGkiOiJpR0pLdExBZG5VTHNxaWxtIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.9o46rcf02qhOuz1Z0qdFXBd8_8IbkAsFcLGB8nHsp8A",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -895,14 +894,11 @@ const CardDetectionApp = () => {
       setDetectionActive(true);
       stopRequestedRef.current = false;
 
-      // 🔦 Enable flashlight for front side scan
-      await enableFlashlight();
-
       // Start detection timeout
       startDetectionTimeout("Front side");
 
       try {
-        const apiResponse = await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront("front", currentSessionId, enableFlashlight);
         
         // Store captured image for display
         if (apiResponse?.capturedImage) {
@@ -989,14 +985,11 @@ const CardDetectionApp = () => {
       setDetectionActive(true);
       stopRequestedRef.current = false;
 
-      // 🔦 Enable flashlight for front side scan
-      await enableFlashlight();
-
       // Start detection timeout
       startDetectionTimeout("Front side");
 
       try {
-        const apiResponse = await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront("front", currentSessionId, enableFlashlight);
         
         // Store captured image for display
         if (apiResponse?.capturedImage) {
@@ -1076,13 +1069,10 @@ const CardDetectionApp = () => {
       setDetectionActive(true);
       stopRequestedRef.current = false;
 
-      // 🔦 Enable flashlight for back side scan
-      await enableFlashlight();
-
       startDetectionTimeout("Back side");
 
       try {
-        const finalResult = await captureAndSendFrames("back", sessionId);
+        const finalResult = await captureAndSendFrames("back", sessionId, enableFlashlight);
         
         // 🛡️ CRITICAL: If success was already received, ignore this result completely
         if (backSuccessReceivedRef.current) {

@@ -15,7 +15,8 @@ export const captureAndSendFrames = async (
   disableFlashlight,
   onImageCaptured,
   providedSessionId = null,
-  phase = 'back'
+  phase = 'back',
+  enableFlashlight = null
 ) => {
   const currentSessionId = providedSessionId || sessionId;
   console.log("🔍 captureAndSendFrames called with phase:", phase, "sessionId:", currentSessionId);
@@ -37,27 +38,35 @@ export const captureAndSendFrames = async (
   // Reset debug frame counter for back side scan
   resetDebugFrameCount();
   
-  // STEP 1: Capture cropped frame FIRST (before screen detection) to ensure refs are available
-  console.log("📸 Capturing cropped static frame for back side screen detection...");
+  // STEP 1: Turn ON flashlight BEFORE capturing frame
+  console.log("🔦 Turning ON flashlight for back side screen detection...");
+  if (enableFlashlight) {
+    await enableFlashlight();
+    // Wait a moment for flashlight to stabilize
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  
+  // STEP 2: Capture Frame #1 (with flashlight ON) for screen detection
+  console.log("📸 Capturing Frame #1 with flashlight ON for back side screen detection...");
   const DEBUG_DOWNLOAD = false;
   
-  const { blob, dataUrl: capturedBackImageDataUrl, cropCoords } = await captureCroppedFrame(
+  const { blob: flashlightBlob, dataUrl: flashlightImageDataUrl, cropCoords } = await captureCroppedFrame(
     videoRef,
     canvasRef,
     DEBUG_DOWNLOAD
   );
   
-  console.log("✅ Cropped static frame captured for back side", cropCoords);
+  console.log("✅ Frame #1 (flashlight) captured for back side", cropCoords);
   
-  // STEP 2: Screen Detection Check for BACK side (using the captured frame)
-  console.log("📱 Starting screen detection check for BACK side...");
+  // STEP 3: Screen Detection Check for BACK side (using the flashlight frame)
+  console.log("📱 Starting screen detection check for BACK side with flashlight frame...");
   let backScreenDetectionPassed = false;
   
   try {
     const formData = new FormData();
-    formData.append('file', blob, 'back_screen_check.jpg');
+    formData.append('file', flashlightBlob, 'back_screen_check.jpg');
     
-    console.log("📤 Sending back side frame to screen detection endpoint...");
+    console.log("📤 Sending back side flashlight frame to screen detection endpoint...");
     const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
       method: 'POST',
       body: formData
@@ -108,24 +117,34 @@ export const captureAndSendFrames = async (
     backScreenDetectionPassed = true;
   }
   
-  // STEP 3: Only show static image AFTER screen detection passes
-  if (backScreenDetectionPassed && onImageCaptured) {
-    onImageCaptured(capturedBackImageDataUrl);
-    console.log("📤 Back side screen detection passed - captured image sent to parent component for display");
-  }
-
-  // 🔦 Turn off flashlight after screen detection completes
-  if (disableFlashlight) {
-    console.log("🔦 Turning off flashlight after back side screen detection");
+  // STEP 4: If screen detection passed, turn OFF flashlight
+  if (backScreenDetectionPassed && disableFlashlight) {
+    console.log("🔦 Back side screen detection passed - turning OFF flashlight");
     await disableFlashlight();
+    // Wait for flashlight to turn off completely
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  
+  // STEP 5: Capture Frame #2 (without flashlight) for actual scanning
+  console.log("📸 Capturing Frame #2 without flashlight for back side scanning...");
+  const { blob: scanBlob, dataUrl: scanImageDataUrl } = await captureCroppedFrame(
+    videoRef,
+    canvasRef,
+    DEBUG_DOWNLOAD
+  );
+  console.log("✅ Frame #2 (scan frame) captured successfully for back side");
+  
+  // STEP 6: Wait 3 seconds BEFORE showing success message
+  console.log("⏱️ Waiting 3 seconds before showing back side success message...");
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // STEP 7: Show Frame #2 and success message to user
+  if (backScreenDetectionPassed && onImageCaptured) {
+    onImageCaptured(scanImageDataUrl);
+    console.log("📤 Back side Frame #2 sent to parent component for display with success message");
   }
 
-  // ⏱️ ADD DELAY: Wait 2-3 seconds before starting the scanning process
-  console.log("⏱️ Waiting 2.5 seconds before starting back side scanning process...");
-  await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 second delay
-  console.log("✅ Delay complete - starting back side scanning process");
-
-  console.log("🔄 Continuing with normal back side card detection using captured frame...");
+  console.log("🔄 Continuing with normal back side card detection using Frame #2...");
 
   return new Promise((resolve, reject) => {
     let frameNumber = 0;
@@ -198,14 +217,12 @@ export const captureAndSendFrames = async (
           return;
         }
         
-        // 📸 Use captured static cropped frame for back side instead of capturing new frames
+        // 📸 Use Frame #2 (scan frame without flashlight) for all back side API calls
         let frame;
         if (!capturedBackFrameBlob) {
-          const DEBUG_DOWNLOAD = false;
-          const { blob } = await captureCroppedFrame(videoRef, canvasRef, DEBUG_DOWNLOAD);
-          capturedBackFrameBlob = blob;
+          capturedBackFrameBlob = scanBlob; // Use the scan frame captured earlier
           frame = capturedBackFrameBlob;
-          console.log('📸 Captured and stored static frame for back side API calls');
+          console.log('📸 Using Frame #2 (scan frame) for back side API calls');
         } else {
           frame = capturedBackFrameBlob;
         }
@@ -427,7 +444,7 @@ export const captureAndSendFrames = async (
     };
     
     processFrame();
-    captureIntervalRef = setInterval(processFrame, 1000);
+    captureIntervalRef = setInterval(processFrame, 800);
     
     timeoutId = setTimeout(() => {
       if (!isComplete) {

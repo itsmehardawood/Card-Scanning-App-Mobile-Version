@@ -302,16 +302,16 @@ const CameraView = ({
 
         {/* Initial Scanning Recommendation Prompt - Show only in idle phase */}
         {showInitialPrompt && currentPhase === 'idle' && (
-          <div className="absolute bottom-4 left-4 right-4 z-30">
+          <div className="absolute bottom-8 left-4 right-4 z-30">
             <div className="bg-black/90 backdrop-blur-sm rounded-lg p-[15px] text-center shadow-lg border-2 border-blue-500">
               
               {/* Title */}
-              <div className="text-blue-600 text-lg font-semibold mb-2">
+              <div className="text-blue-600 text-[14px] font-semibold mb-2">
                Guidelines for better scanning
               </div>
 
               {/* Message */}
-              <div className="text-gray-100 text-sm leading-relaxed mb-2">
+              <div className="text-gray-100 text-[12px] leading-relaxed mb-2">
                 We recommend putting the card on a flat surface, avoiding dark places, and positioning your card in the camera view for better scanning.
               </div>
 
