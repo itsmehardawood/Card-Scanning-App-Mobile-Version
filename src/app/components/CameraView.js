@@ -26,7 +26,7 @@ const CameraView = ({
       // Hide the prompt after 3 seconds
       const timer = setTimeout(() => {
         setShowMotionPrompt(false);
-      }, 3000);
+      }, 1000);
 
       return () => clearTimeout(timer);
     }
@@ -90,7 +90,8 @@ const CameraView = ({
   };
 
   // Check if we should show the scanning animation
-  const showScanningAnimation = detectionActive && (
+  // Only show when we have a captured static frame and are actively scanning
+  const showScanningAnimation = detectionActive && capturedImage && (
     currentPhase === 'front' || 
     currentPhase === 'back'
   );
@@ -147,8 +148,8 @@ const CameraView = ({
           />
         )}
 
-        {/* Success Message Overlay - Show on top of captured image */}
-        {showCaptureSuccessMessage && capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
+        {/* Success Message Overlay - Show even without captured image during initial 4 seconds */}
+        {showCaptureSuccessMessage && (currentPhase === 'front' || currentPhase === 'back') && (
           <div className="absolute inset-0 flex items-center justify-center z-35">
             <div className="bg-black/90 backdrop-blur-sm rounded-lg p-4 mx-3 max-w-md text-center shadow-lg border-2 border-green-500">
               {/* Success Icon */}
@@ -168,8 +169,8 @@ const CameraView = ({
                 </svg>
               </div>
               
-              <h3 className="text-md font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
-              <p className="text-gray-200 text-sm leading-relaxed">
+              <h3 className="text-[14px] font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
+              <p className="text-gray-200 text-[12px] leading-relaxed">
                 Your card frame has been captured successfully. We will now proceed with an intelligence security scan.
               </p>
             </div>

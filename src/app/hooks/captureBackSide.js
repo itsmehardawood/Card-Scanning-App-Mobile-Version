@@ -134,14 +134,21 @@ export const captureAndSendFrames = async (
   );
   console.log("✅ Frame #2 (scan frame) captured successfully for back side");
   
-  // STEP 6: Wait 3 seconds BEFORE showing success message
-  console.log("⏱️ Waiting 3 seconds before showing back side success message...");
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  // STEP 6: Show success message immediately (without showing the frame yet)
+  console.log("📤 Showing back side success message first (frame will be shown after 4 seconds)...");
+  if (backScreenDetectionPassed && onImageCaptured) {
+    // Pass null to show success message without frame
+    onImageCaptured(null);
+  }
   
-  // STEP 7: Show Frame #2 and success message to user
+  // STEP 7: Wait 4 seconds while success message is displayed
+  console.log("⏱️ Waiting 4 seconds while back side success message is displayed...");
+  await new Promise(resolve => setTimeout(resolve, 4000));
+  
+  // STEP 8: Now show Frame #2 in CameraView and start scanning
   if (backScreenDetectionPassed && onImageCaptured) {
     onImageCaptured(scanImageDataUrl);
-    console.log("📤 Back side Frame #2 sent to parent component for display with success message");
+    console.log("📤 Back side Frame #2 sent to parent component for display, starting scanning process");
   }
 
   console.log("🔄 Continuing with normal back side card detection using Frame #2...");

@@ -721,7 +721,7 @@ export const captureCroppedFrame = async (videoRef, canvasRef, debugDownload = f
       let blobCreated = false;
       const blobTimeout = setTimeout(() => {
         if (!blobCreated) {
-          reject(new Error('Blob creation timeout'));
+          reject(new Error('Frame creation timeout'));
         }
       }, 5000); // 5 second timeout
       
@@ -733,7 +733,7 @@ export const captureCroppedFrame = async (videoRef, canvasRef, debugDownload = f
           console.log(`✅ Cropped frame ready: ${blob.size} bytes`);
           resolve({ blob, dataUrl, cropCoords });
         } else {
-          reject(new Error('Failed to create blob from canvas'));
+          reject(new Error('Failed to create frame from the screen'));
         }
       }, 'image/jpeg', 0.95);
       
