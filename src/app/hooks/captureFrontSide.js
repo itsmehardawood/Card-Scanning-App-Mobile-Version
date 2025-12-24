@@ -124,8 +124,9 @@ export const captureAndSendFramesFront = async (
   if (screenDetectionPassed && disableFlashlight) {
     console.log("🔦 Screen detection passed - turning OFF flashlight");
     await disableFlashlight();
-    // Wait for flashlight to turn off completely
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Wait for flashlight to turn off completely AND camera to adjust exposure
+    console.log("⏳ Waiting 800ms for camera sensor to adjust after flashlight off...");
+    await new Promise(resolve => setTimeout(resolve, 800));
   }
   
   // STEP 5: Capture Frame #2 (without flashlight) for actual scanning
