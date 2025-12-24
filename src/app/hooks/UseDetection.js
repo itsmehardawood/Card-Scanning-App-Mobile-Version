@@ -21,7 +21,7 @@ export const useDetection = (
   const captureIntervalRef = useRef(null);
 
   // Wrapper for front side detection
-  const captureAndSendFramesFront = async (phase, providedSessionId = null, enableFlashlight = null) => {
+  const captureAndSendFramesFront = async (phase, providedSessionId = null, enableFlashlight = null, onFramesCaptured = null) => {
     return frontSideDetection(
       videoRef,
       canvasRef,
@@ -36,7 +36,8 @@ export const useDetection = (
       onImageCaptured,
       providedSessionId,
       phase,
-      enableFlashlight
+      enableFlashlight,
+      onFramesCaptured // Pass callback through
     );
   };
 

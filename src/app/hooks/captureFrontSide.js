@@ -16,7 +16,8 @@ export const captureAndSendFramesFront = async (
   onImageCaptured,
   providedSessionId = null,
   phase = 'front',
-  enableFlashlight = null
+  enableFlashlight = null,
+  onFramesCaptured = null // Callback to call after Frame #2 is captured
 ) => {
   const currentSessionId = providedSessionId || sessionId;
   console.log("🔍 captureAndSendFramesFront called with phase:", phase, "sessionId:", currentSessionId);
@@ -129,6 +130,29 @@ export const captureAndSendFramesFront = async (
   
   // STEP 5: Capture Frame #2 (without flashlight) for actual scanning
   console.log("📸 Capturing Frame #2 without flashlight for scanning...");
+  
+  // Wait for video element to have valid dimensions (retry up to 10 times)
+  if (videoRef.current) {
+    let retries = 0;
+    const maxRetries = 10;
+    while (retries < maxRetries) {
+      const rect = videoRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        console.log("✅ Video has valid dimensions:", { width: rect.width, height: rect.height });
+        break;
+      }
+      console.log(`⏳ Waiting for video dimensions... (attempt ${retries + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      retries++;
+    }
+    
+    // Final check
+    const finalRect = videoRef.current.getBoundingClientRect();
+    if (finalRect.width === 0 || finalRect.height === 0) {
+      console.error("❌ Video still has no dimensions after retries:", finalRect);
+    }
+  }
+  
   const { blob: scanBlob, dataUrl: scanImageDataUrl } = await captureCroppedFrame(
     videoRef,
     canvasRef,
@@ -136,22 +160,21 @@ export const captureAndSendFramesFront = async (
   );
   console.log("✅ Frame #2 (scan frame) captured successfully");
   
-  // STEP 6: Show success message immediately (without showing the frame yet)
-  console.log("📤 Showing success message first (frame will be shown after 4 seconds)...");
-  if (screenDetectionPassed && onImageCaptured) {
-    // Pass null to show success message without frame
-    onImageCaptured(null);
-  }
-  
-  // STEP 7: Wait 4 seconds while success message is displayed
-  console.log("⏱️ Waiting 4 seconds while success message is displayed...");
-  await new Promise(resolve => setTimeout(resolve, 4000));
-  
-  // STEP 8: Now show Frame #2 in CameraView and start scanning
+  // STEP 6: Show Frame #2 immediately with success message
+  console.log("📤 Showing Frame #2 and success message immediately...");
   if (screenDetectionPassed && onImageCaptured) {
     onImageCaptured(scanImageDataUrl);
-    console.log("📤 Frame #2 sent to parent component for display, starting scanning process");
   }
+  
+  // STEP 6.5: Now that Frame #2 is captured and displayed, notify parent to change phase
+  if (onFramesCaptured) {
+    console.log("🔔 Notifying parent that frames are captured - safe to change phase now");
+    onFramesCaptured();
+  }
+  
+  // STEP 7: Wait 4 seconds before starting scanning (success message will auto-hide)
+  console.log("⏱️ Waiting 4 seconds before starting scan (success message visible)...");
+  await new Promise(resolve => setTimeout(resolve, 4000));
   
   console.log("🔄 Continuing with normal card detection using Frame #2...");
   
@@ -399,6 +422,16 @@ export const captureAndSendFramesFront = async (
               }
             }
             
+            // For front side, check if chip and bank_logo are detected AND sufficient buffered frames
+            if (phase === 'front' && bufferedFrames >= 4 && apiResponse.chip === true && apiResponse.bank_logo === true) {
+              console.log(`✅ Front side requirements met: chip and bank_logo detected, bufferedFrames=${bufferedFrames}`);
+              hasReceivedSuccess = true; // Mark success to ignore all subsequent responses
+              isComplete = true;
+              cleanup();
+              resolve(apiResponse);
+              return;
+            }
+            
             // For back side, check both sufficient frames and required features
             if (phase === 'back' && bufferedFrames >= 4) {
               const { count, detectedFeatures } = countBackSideFeatures(apiResponse);
@@ -409,12 +442,6 @@ export const captureAndSendFramesFront = async (
                 resolve(apiResponse);
                 return;
               }
-            } else if (bufferedFrames >= 4) {
-              console.log(`✅ Sufficient frames buffered (${bufferedFrames})`);
-              isComplete = true;
-              cleanup();
-              resolve(apiResponse);
-              return;
             }
             
             // Fallback: Only stop due to frame limit if we've been waiting a while
@@ -431,8 +458,15 @@ export const captureAndSendFramesFront = async (
                   } else {
                     reject(new Error('Insufficient back side features detected'));
                   }
+                } else if (phase === 'front') {
+                  const bufferedFrames = lastApiResponse.buffer_info?.front_frames_buffered || 0;
+                  if (bufferedFrames >= 4 && lastApiResponse.chip === true && lastApiResponse.bank_logo === true) {
+                    resolve(lastApiResponse);
+                  } else {
+                    reject(new Error('Front side requirements not met: chip and bank_logo must be detected'));
+                  }
                 } else {
-                  resolve(lastApiResponse);
+                  reject(new Error('Maximum frames reached without sufficient data'));
                 }
               } else {
                 reject(new Error('Maximum frames reached without sufficient data'));
@@ -460,6 +494,12 @@ export const captureAndSendFramesFront = async (
     captureIntervalRef = setInterval(processFrame, 800);
     
     timeoutId = setTimeout(() => {
+      // Check if already completed or success received - don't process timeout
+      if (isComplete || hasReceivedSuccess) {
+        console.log('⏭️ Timeout fired but detection already completed successfully - ignoring timeout');
+        return;
+      }
+      
       if (!isComplete) {
         cleanup();
         
@@ -490,14 +530,20 @@ export const captureAndSendFramesFront = async (
             } else {
               reject(new Error('Insufficient back side features'));
             }
+          } else if (phase === 'front') {
+            const bufferedFrames = lastApiResponse.buffer_info?.front_frames_buffered || 0;
+            if (bufferedFrames >= 4 && lastApiResponse.chip === true && lastApiResponse.bank_logo === true) {
+              resolve(lastApiResponse);
+            } else {
+              reject(new Error('Front side requirements not met: chip and bank_logo must both be detected'));
+            }
+          } else {
+            reject(new Error('Timeout: requirements not met'));
           }
-          
-          console.log('Timeout reached, using last response');
-          resolve(lastApiResponse);
         } else {
           reject(new Error('Timeout: Network Error or No successful API responses received'));
         }
       }
-    }, 15000); // Reduced to 15 seconds timeout
+    }, 20000); // Reduced to 20 seconds timeout
   });
 };

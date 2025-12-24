@@ -127,6 +127,29 @@ export const captureAndSendFrames = async (
   
   // STEP 5: Capture Frame #2 (without flashlight) for actual scanning
   console.log("📸 Capturing Frame #2 without flashlight for back side scanning...");
+  
+  // Wait for video element to have valid dimensions (retry up to 10 times)
+  if (videoRef.current) {
+    let retries = 0;
+    const maxRetries = 10;
+    while (retries < maxRetries) {
+      const rect = videoRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        console.log("✅ Back side video has valid dimensions:", { width: rect.width, height: rect.height });
+        break;
+      }
+      console.log(`⏳ Waiting for back side video dimensions... (attempt ${retries + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      retries++;
+    }
+    
+    // Final check
+    const finalRect = videoRef.current.getBoundingClientRect();
+    if (finalRect.width === 0 || finalRect.height === 0) {
+      console.error("❌ Back side video still has no dimensions after retries:", finalRect);
+    }
+  }
+  
   const { blob: scanBlob, dataUrl: scanImageDataUrl } = await captureCroppedFrame(
     videoRef,
     canvasRef,
@@ -134,22 +157,15 @@ export const captureAndSendFrames = async (
   );
   console.log("✅ Frame #2 (scan frame) captured successfully for back side");
   
-  // STEP 6: Show success message immediately (without showing the frame yet)
-  console.log("📤 Showing back side success message first (frame will be shown after 4 seconds)...");
-  if (backScreenDetectionPassed && onImageCaptured) {
-    // Pass null to show success message without frame
-    onImageCaptured(null);
-  }
-  
-  // STEP 7: Wait 4 seconds while success message is displayed
-  console.log("⏱️ Waiting 4 seconds while back side success message is displayed...");
-  await new Promise(resolve => setTimeout(resolve, 4000));
-  
-  // STEP 8: Now show Frame #2 in CameraView and start scanning
+  // STEP 6: Show Frame #2 immediately with success message
+  console.log("📤 Showing back side Frame #2 and success message immediately...");
   if (backScreenDetectionPassed && onImageCaptured) {
     onImageCaptured(scanImageDataUrl);
-    console.log("📤 Back side Frame #2 sent to parent component for display, starting scanning process");
   }
+  
+  // STEP 7: Wait 4 seconds before starting scanning (success message will auto-hide)
+  console.log("⏱️ Waiting 4 seconds before starting back side scan (success message visible)...");
+  await new Promise(resolve => setTimeout(resolve, 4000));
 
   console.log("🔄 Continuing with normal back side card detection using Frame #2...");
 
@@ -454,6 +470,12 @@ export const captureAndSendFrames = async (
     captureIntervalRef = setInterval(processFrame, 800);
     
     timeoutId = setTimeout(() => {
+      // Check if already completed or success received - don't process timeout
+      if (isComplete || hasReceivedSuccess) {
+        console.log('⏭️ Timeout fired but detection already completed successfully - ignoring timeout');
+        return;
+      }
+      
       if (!isComplete) {
         cleanup();
         
@@ -499,6 +521,6 @@ export const captureAndSendFrames = async (
           reject(new Error('Timeout: No successful API responses received'));
         }
       }
-    }, 15000); // Reduced to 15 seconds timeout
+    }, 20000); // Reduced to 20 seconds timeout
   });
 };

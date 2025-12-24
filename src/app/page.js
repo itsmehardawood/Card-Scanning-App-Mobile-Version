@@ -571,9 +571,8 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:
-          "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjY1MDQ3NjEsImV4cCI6MTc2NjUwODM2MSwibmJmIjoxNzY2NTA0NzYxLCJqdGkiOiJGU2Y5NzRWM0RtdVBHaGpmIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.fFH-_MCVxaE5WHm8bxICwdSOiRRGvpNhzwRUpS4d0iA",
-          timestamp: Date.now(),
+          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjY1NzU2NjAsImV4cCI6MTc2NjU3OTI2MCwibmJmIjoxNzY2NTc1NjYwLCJqdGkiOiI5YTU0d21WTHJJNTFyNDdIIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.kEAfOv7jRYzpuB4bRne9I-nZv90KPra-6WljuF53DmY",
+             timestamp: Date.now(),
           source: "development_demo",
         };
 
@@ -888,7 +887,8 @@ const CardDetectionApp = () => {
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
 
-      setCurrentPhase("front");
+      // DON'T set phase to 'front' yet - wait for frames to be captured first
+      // setCurrentPhase("front"); // MOVED INSIDE CALLBACK
       
       // Hide prompt text when detection starts
       setShowPromptText(false);
@@ -899,7 +899,17 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        const apiResponse = await captureAndSendFramesFront("front", currentSessionId, enableFlashlight);
+        const apiResponse = await captureAndSendFramesFront(
+          "front", 
+          currentSessionId, 
+          enableFlashlight,
+          () => {
+            // This callback is called AFTER Frame #2 is captured and displayed
+            // Now it's safe to change phase without hiding the video
+            console.log("🔄 Setting phase to 'front' after frames captured");
+            setCurrentPhase("front");
+          }
+        );
         
         // Store captured image for display
         if (apiResponse?.capturedImage) {
@@ -979,7 +989,8 @@ const CardDetectionApp = () => {
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
 
-      setCurrentPhase("front");
+      // DON'T set phase to 'front' yet - wait for frames to be captured first
+      // setCurrentPhase("front"); // MOVED INSIDE CALLBACK
       
       // Hide prompt text when detection starts
       setShowPromptText(false);
@@ -990,7 +1001,17 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        const apiResponse = await captureAndSendFramesFront("front", currentSessionId, enableFlashlight);
+        const apiResponse = await captureAndSendFramesFront(
+          "front", 
+          currentSessionId, 
+          enableFlashlight,
+          () => {
+            // This callback is called AFTER Frame #2 is captured and displayed
+            // Now it's safe to change phase without hiding the video
+            console.log("🔄 Setting phase to 'front' after frames captured (startFrontSideDetection)");
+            setCurrentPhase("front");
+          }
+        );
         
         // Store captured image for display
         if (apiResponse?.capturedImage) {
