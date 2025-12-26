@@ -159,7 +159,7 @@ const CardDetectionApp = () => {
 
           if (display_logo) {
             // 🔒 Force HTTPS
-            const safeLogo = display_logo.replace(/^http:\/\//i, "https://");
+            const safeLogo = display_logo.replace(/^http:\/\//i, "http://");
             console.log("✅ Setting merchant logo:", safeLogo);
             setMerchantLogo(safeLogo);
           }
@@ -571,8 +571,9 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjY1NzU2NjAsImV4cCI6MTc2NjU3OTI2MCwibmJmIjoxNzY2NTc1NjYwLCJqdGkiOiI5YTU0d21WTHJJNTFyNDdIIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.kEAfOv7jRYzpuB4bRne9I-nZv90KPra-6WljuF53DmY",
-             timestamp: Date.now(),
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjY3NDM1MTYsImV4cCI6MTc2Njc0NzExNiwibmJmIjoxNzY2NzQzNTE2LCJqdGkiOiJ6d0NpcVpKZ2RCVUFiakt6Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.sRcShtexivMPnq21rASFPJxE0uFVjo4YoEp-jO8-It0",
+          
+          timestamp: Date.now(),
           source: "development_demo",
         };
 
@@ -928,7 +929,7 @@ const CardDetectionApp = () => {
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
           // Check for fake card detection error
-          if (error.message && error.message.includes('Fake card detected')) {
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
             setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
@@ -1030,7 +1031,7 @@ const CardDetectionApp = () => {
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
           // Check for fake card detection error
-          if (error.message && error.message.includes('Fake card detected')) {
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
             console.log("🚫 Fake card detected on front side - stopping scan");
             setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
@@ -1135,7 +1136,7 @@ const CardDetectionApp = () => {
             // Show success message for 1 second before showing results
             setTimeout(() => {
               setCurrentPhase("results");
-            }, 1000);
+            }, 500);
           } else {
             // 🛡️ Double check - if success was already received, don't process failure
             if (backSuccessReceivedRef.current) {
@@ -1159,8 +1160,8 @@ const CardDetectionApp = () => {
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
           // Check for fake card detection error
-          if (error.message && error.message.includes('Fake card detected')) {
-            console.log("🚫 Fake card detected on back side - stopping scan");
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
+            console.log("🚫 Unacceptable card detected on back side - stopping scan");
             setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
             setCurrentPhase('fake-card-error');
             setFakeCardDetectedPhase('back');
@@ -1374,18 +1375,17 @@ const CardDetectionApp = () => {
       <div className="container mx-auto max-w-4xl">
         {/* Debug info (only shows in development) */}
         <div className="flex items-center justify-center bg-white p-2 sm:p-4 rounded-md mb-4 sm:mb-8 shadow">
-          {/* {merchantLogo && (
+          {merchantLogo && (
             <img
-              // width={50}
-              // height={50}
+              width={50}
+              height={50}
               src={merchantLogo}
               alt="Merchant Logo"
               className=" h-15 w-15 object-contain mr-3"
             />
-          )} */}
+          )}
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-            {/* {merchantName || "Card Security Scan"} */}
-                        {"Card Security Scan"}
+            {merchantName || "Card Security Scan"}
 
           </h1>
         </div>

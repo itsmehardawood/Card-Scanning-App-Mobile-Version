@@ -68,7 +68,7 @@ export const captureAndSendFramesFront = async (
     formData.append('file', flashlightBlob, 'screen_check.jpg');
     
     console.log("📤 Sending flashlight frame to screen detection endpoint...");
-    const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
+    const screenDetectResponse = await fetch('https://api.cardnest.io/screen-detect/detect-screen', {
       method: 'POST',
       body: formData
     });
@@ -101,7 +101,7 @@ export const captureAndSendFramesFront = async (
           await disableFlashlight();
         }
         
-        throw new Error('Fake card detected on front side - screen or photo detected instead of physical card');
+        throw new Error('Unacceptable Card Detection on front side - screen or photo detected instead of physical card');
       } else {
         console.warn("⚠️ is_screen property not found in response, continuing...");
         screenDetectionPassed = true; // Continue anyway
@@ -111,7 +111,7 @@ export const captureAndSendFramesFront = async (
       screenDetectionPassed = true; // Continue anyway
     }
   } catch (screenError) {
-    if (screenError.message.includes('Fake card detected')) {
+    if (screenError.message.includes('Unacceptable Card Detection')) {
       // Re-throw fake card errors
       throw screenError;
     }
@@ -175,7 +175,7 @@ export const captureAndSendFramesFront = async (
   
   // STEP 7: Wait 4 seconds before starting scanning (success message will auto-hide)
   console.log("⏱️ Waiting 4 seconds before starting scan (success message visible)...");
-  await new Promise(resolve => setTimeout(resolve, 4000));
+  await new Promise(resolve => setTimeout(resolve, 3500));
   
   console.log("🔄 Continuing with normal card detection using Frame #2...");
   
@@ -374,10 +374,10 @@ export const captureAndSendFramesFront = async (
             if (phase === 'front' && apiResponse.fake_card === true) {
               isComplete = true;
               cleanup();
-              const errorMsg = 'Fake card detected. Please use an original physical card.';
+              const errorMsg = 'Unacceptable Card Detection. Please use an original physical card.';
               setErrorMessage(errorMsg);
               setCurrentPhase('fake-card-error');
-              reject(new Error('Fake card detected'));
+              reject(new Error('Unacceptable Card Detection'));
               return;
             }
 

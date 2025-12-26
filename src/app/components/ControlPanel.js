@@ -89,7 +89,7 @@ const ControlPanel = ({
       <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
         <div className="text-center">
           <div className="mb-4">
-            <h3 className="text-lg sm:text-xl font-semibold text-red-600 mb-2">Fake Card Detected</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-red-600 mb-2">Unacceptable Card Detection</h3>
             <p className="text-red-700 mb-3">{errorMessage || 'Please use an original physical card.'}</p>
             
            

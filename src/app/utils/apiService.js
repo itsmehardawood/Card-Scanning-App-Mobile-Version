@@ -21,10 +21,10 @@ export const sendFrameToAPI = async (
   // const apiUrl = `https://477a9ab44259.ngrok-free.app/detect/${merchantId}`;
 
   // dev server
-  const apiUrl = `https://testscan.cardnest.io/detect/${merchantId}`;
+  // const apiUrl = `https://testscan.cardnest.io/detect/${merchantId}`;
 
   // prod server
-  // const apiUrl = `https://api.cardnest.io/detect/${merchantId}`;
+  const apiUrl = `https://api.cardnest.io/detect/${merchantId}`;
 
   const file = new File([frameBlob], `${phase}_frame_${frameNumber}.jpg`, {
     type: "image/jpeg",
