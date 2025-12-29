@@ -352,7 +352,128 @@ export const requestCameraPermissions = async (videoRef, onPermissionDenied = nu
   }
 };
 
-// 📹 CHECK IF CAMERA IS WORKING (Enhanced)
+// � CHECK TORCH SUPPORT
+export const checkTorchSupport = async (videoRef) => {
+  try {
+    if (!videoRef.current?.srcObject) {
+      console.log('🔦 No video stream available for torch check');
+      return false;
+    }
+
+    const stream = videoRef.current.srcObject;
+    const videoTrack = stream.getVideoTracks()[0];
+    
+    if (!videoTrack) {
+      console.log('🔦 No video track found');
+      return false;
+    }
+
+    const capabilities = videoTrack.getCapabilities();
+    const hasTorch = capabilities && 'torch' in capabilities;
+    
+    console.log('🔦 Torch capability check:', {
+      supported: hasTorch,
+      capabilities: capabilities
+    });
+    
+    return hasTorch;
+  } catch (error) {
+    console.error('❌ Error checking torch support:', error);
+    return false;
+  }
+};
+
+// 🔦 ENABLE TORCH/FLASHLIGHT
+export const enableTorch = async (videoRef) => {
+  try {
+    console.log('🔦 Attempting to enable torch...');
+    
+    if (!videoRef.current?.srcObject) {
+      console.warn('⚠️ No video stream available');
+      return { success: false, reason: 'NO_STREAM' };
+    }
+
+    const stream = videoRef.current.srcObject;
+    const videoTrack = stream.getVideoTracks()[0];
+    
+    if (!videoTrack) {
+      console.warn('⚠️ No video track found');
+      return { success: false, reason: 'NO_TRACK' };
+    }
+
+    // Check if torch is supported
+    const capabilities = videoTrack.getCapabilities();
+    const hasTorch = capabilities && 'torch' in capabilities;
+    
+    if (!hasTorch) {
+      console.warn('⚠️ Torch not supported on this device');
+      return { success: false, reason: 'NOT_SUPPORTED' };
+    }
+
+    // Try to apply torch constraint
+    try {
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: true }]
+      });
+      
+      console.log('✅ Torch enabled successfully via advanced constraints');
+      return { success: true, method: 'advanced' };
+    } catch (advancedError) {
+      console.warn('⚠️ Advanced torch constraint failed:', advancedError.message);
+      
+      // Fallback: Try basic constraint
+      try {
+        await videoTrack.applyConstraints({
+          torch: true
+        });
+        
+        console.log('✅ Torch enabled successfully via basic constraint');
+        return { success: true, method: 'basic' };
+      } catch (basicError) {
+        console.error('❌ Basic torch constraint failed:', basicError.message);
+        return { success: false, reason: 'CONSTRAINT_FAILED', error: basicError.message };
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error enabling torch:', error);
+    return { success: false, reason: 'ERROR', error: error.message };
+  }
+};
+
+// 🔦 DISABLE TORCH/FLASHLIGHT
+export const disableTorch = async (videoRef) => {
+  try {
+    console.log('🔦 Disabling torch...');
+    
+    if (!videoRef.current?.srcObject) {
+      return { success: true, reason: 'NO_STREAM' };
+    }
+
+    const stream = videoRef.current.srcObject;
+    const videoTrack = stream.getVideoTracks()[0];
+    
+    if (!videoTrack) {
+      return { success: true, reason: 'NO_TRACK' };
+    }
+
+    // Try to disable torch
+    try {
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: false }]
+      });
+      console.log('✅ Torch disabled successfully');
+      return { success: true };
+    } catch (error) {
+      console.warn('⚠️ Error disabling torch:', error.message);
+      return { success: false, error: error.message };
+    }
+  } catch (error) {
+    console.error('❌ Error in disableTorch:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// �📹 CHECK IF CAMERA IS WORKING (Enhanced)
 export const isCameraWorking = (videoRef) => {
   if (!videoRef.current) {
     console.log('📹 Video ref is null');
@@ -512,9 +633,16 @@ const captureFrameInternal = (videoRef, canvasRef, resolve, reject) => {
 };
 
 // 🧹 CLEANUP CAMERA STREAM (Enhanced)
-export const cleanupCamera = (videoRef) => {
+export const cleanupCamera = async (videoRef) => {
   try {
     if (videoRef.current?.srcObject) {
+      // 🔦 Disable torch before cleanup
+      try {
+        await disableTorch(videoRef);
+      } catch (torchError) {
+        console.warn('⚠️ Error disabling torch during cleanup:', torchError);
+      }
+      
       const tracks = videoRef.current.srcObject.getTracks();
       tracks.forEach(track => {
         console.log('🔌 Stopping track:', track.kind, track.label || 'Unknown');
@@ -784,8 +912,8 @@ export const resetDebugFrameCount = () => {
   console.log('🔄 Debug frame counter reset');
 };
 
-// �🔧 DIAGNOSTIC UTILITIES
-export const getCameraDiagnostics = async () => {
+// 🔧 DIAGNOSTIC UTILITIES
+export const getCameraDiagnostics = async (videoRef = null) => {
   const info = {
     isWebView: isWebView(),
     userAgent: navigator.userAgent,
@@ -808,6 +936,26 @@ export const getCameraDiagnostics = async () => {
     }
   } catch (error) {
     info.deviceEnumError = error.message;
+  }
+  
+  // 🔦 Check torch support if videoRef is provided
+  if (videoRef) {
+    try {
+      info.torchSupported = await checkTorchSupport(videoRef);
+      
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject;
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          const capabilities = videoTrack.getCapabilities();
+          info.torchCapabilities = capabilities?.torch || null;
+          const settings = videoTrack.getSettings();
+          info.torchEnabled = settings?.torch || false;
+        }
+      }
+    } catch (error) {
+      info.torchError = error.message;
+    }
   }
   
   return info;
