@@ -143,12 +143,16 @@ const checkCameraTorchSupport = async (deviceId) => {
   try {
     // Handle missing or invalid deviceId
     if (!deviceId || typeof deviceId !== 'string' || deviceId.length === 0) {
-      console.log('🔦 Invalid device ID provided, skipping torch check');
+      console.log('🔦 ❌ Invalid device ID provided, skipping torch check');
+      console.log(`🔦 deviceId value: ${deviceId}, type: ${typeof deviceId}`);
       return { supported: false, capabilities: null, error: 'INVALID_DEVICE_ID' };
     }
     
     const deviceIdShort = deviceId.length > 8 ? deviceId.substring(0, 8) + '...' : deviceId;
+    console.log(`🔦 ========================================`);
     console.log(`🔦 Testing torch support for device: ${deviceIdShort}`);
+    console.log(`🔦 Full device ID: ${deviceId}`);
+    console.log(`🔦 Requesting getUserMedia...`);
     
     // Get a minimal stream from this specific camera
     testStream = await navigator.mediaDevices.getUserMedia({
@@ -159,16 +163,24 @@ const checkCameraTorchSupport = async (deviceId) => {
       }
     });
     
+    console.log(`🔦 ✅ Got media stream`);
+    
     const videoTrack = testStream.getVideoTracks()[0];
     if (!videoTrack) {
-      console.log('🔦 No video track obtained');
-      return { supported: false, capabilities: null };
+      console.log('🔦 ❌ No video track obtained from stream');
+      return { supported: false, capabilities: null, error: 'NO_VIDEO_TRACK' };
     }
     
+    console.log(`🔦 Video track obtained: ${videoTrack.label}`);
+    console.log(`🔦 Getting track capabilities...`);
+    
     const capabilities = videoTrack.getCapabilities();
+    console.log(`🔦 Capabilities:`, JSON.stringify(capabilities, null, 2));
+    
     const hasTorch = capabilities && 'torch' in capabilities;
     
-    console.log(`🔦 Camera ${deviceIdShort} torch support:`, hasTorch);
+    console.log(`🔦 Camera ${deviceIdShort} torch support: ${hasTorch ? '✅ YES' : '❌ NO'}`);
+    console.log(`🔦 ========================================`);
     
     return { 
       supported: hasTorch, 
@@ -177,12 +189,17 @@ const checkCameraTorchSupport = async (deviceId) => {
     };
   } catch (error) {
     const deviceIdShort = deviceId && deviceId.length > 8 ? deviceId.substring(0, 8) + '...' : (deviceId || 'unknown');
-    console.warn(`⚠️ Could not test torch for device ${deviceIdShort}:`, error.message);
+    console.log(`🔦 ========================================`);
+    console.log(`🔦 ❌ ERROR testing torch for device ${deviceIdShort}`);
+    console.warn(`🔦 Error name: ${error.name}`);
+    console.warn(`🔦 Error message: ${error.message}`);
+    console.log(`🔦 ========================================`);
     return { supported: false, capabilities: null, error: error.message };
   } finally {
     // Always clean up the test stream
     if (testStream) {
       testStream.getTracks().forEach(track => track.stop());
+      console.log(`🔦 Test stream cleaned up`);
     }
   }
 };
@@ -216,11 +233,22 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     
     const devices = await enumerateVideoDevices();
     
+    // Debug log - check raw device objects
+    console.log('📷 Raw devices from enumeration:', devices.map(d => ({
+      label: d.label,
+      deviceId: d.deviceId,
+      kind: d.kind,
+      hasDeviceId: !!d.deviceId,
+      deviceIdType: typeof d.deviceId
+    })));
+    
     // Log all cameras to server
     await logToServer('device-info', `Found ${devices.length} cameras`, {
       cameras: devices.map(d => ({
         label: d.label || 'Unknown',
         deviceId: d.deviceId,
+        deviceIdPresent: !!d.deviceId,
+        deviceIdType: typeof d.deviceId,
         facing: classifyCameraFacing(d)
       }))
     });
@@ -243,8 +271,15 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     
     console.log('📷 Classified cameras:');
     classifiedCameras.forEach(cam => {
-      console.log(`  - ${cam.label || 'Unknown'}: facing=${cam.facing}`);
+      console.log(`  - ${cam.label || 'Unknown'}: facing=${cam.facing}, deviceId=${cam.deviceId ? cam.deviceId.substring(0, 12) + '...' : 'MISSING'}`);
     });
+    
+    console.log('📷 Classified cameras full details:', classifiedCameras.map(c => ({
+      label: c.label,
+      deviceId: c.deviceId,
+      facing: c.facing,
+      hasDeviceId: !!c.deviceId
+    })));
     
     // Filter cameras based on scan side
     const targetFacing = scanSide === 'front' ? 'front' : 'back';
@@ -263,21 +298,51 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     }
     
     console.log(`📷 ${targetCameras.length} candidate camera(s) for ${scanSide}-side scan`);
+    console.log('📷 Target cameras details:', targetCameras.map(c => ({
+      label: c.label,
+      deviceId: c.deviceId ? c.deviceId.substring(0, 12) + '...' : 'MISSING',
+      facing: c.facing,
+      hasDeviceId: !!c.deviceId,
+      deviceIdLength: c.deviceId ? c.deviceId.length : 0
+    })));
     
     // For back-side scan, prioritize torch-capable cameras
     if (scanSide === 'back' && targetCameras.length > 0) {
-      console.log('🔦 Checking torch support on candidate cameras...');
+      console.log('🔦 ========================================');
+      console.log('🔦 STARTING TORCH CAPABILITY CHECK');
+      console.log('🔦 ========================================');
+      console.log(`🔦 Will test ${targetCameras.length} camera(s) for torch support`);
       
-      for (const camera of targetCameras) {
+      await logToServer('torch-check-start', `Testing ${targetCameras.length} cameras for torch`, {
+        cameras: targetCameras.map(c => ({
+          label: c.label,
+          deviceId: c.deviceId,
+          facing: c.facing
+        }))
+      });
+      
+      for (let i = 0; i < targetCameras.length; i++) {
+        const camera = targetCameras[i];
+        console.log(`\n🔦 [${i + 1}/${targetCameras.length}] Testing camera: ${camera.label || 'Unknown'}`);
+        console.log(`🔦   - Device ID present: ${!!camera.deviceId}`);
+        console.log(`🔦   - Device ID type: ${typeof camera.deviceId}`);
+        console.log(`🔦   - Device ID value: ${camera.deviceId || 'NULL/UNDEFINED'}`);
+        
         // Skip cameras without valid deviceId
-        if (!camera.deviceId || camera.deviceId.length === 0) {
-          console.log(`⏭️ Skipping camera "${camera.label || 'Unknown'}" - no valid deviceId`);
+        if (!camera.deviceId || typeof camera.deviceId !== 'string' || camera.deviceId.length === 0) {
+          console.log(`⏭️ ⚠️ SKIPPING - Invalid deviceId`);
+          await logToServer('torch-test-skip', `Skipped: ${camera.label}`, {
+            camera: { label: camera.label, deviceId: camera.deviceId },
+            reason: 'Invalid deviceId'
+          });
           continue;
         }
         
         console.log(`🔦 Testing camera: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 12)}...)`);
+        console.log(`🔦 Calling checkCameraTorchSupport...`);
         
         const torchResult = await checkCameraTorchSupport(camera.deviceId);
+        console.log(`🔦 Torch test result:`, torchResult);
         
         // Log torch test result to server
         await logToServer('torch-test', `Torch test: ${camera.label}`, {
@@ -288,12 +353,18 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
           },
           torchResult: {
             supported: torchResult.supported,
-            error: torchResult.error
+            error: torchResult.error,
+            capabilities: torchResult.capabilities,
+            trackLabel: torchResult.trackLabel
           }
         });
         
         if (torchResult.supported) {
-          console.log(`✅ Found torch-capable camera: ${camera.label || torchResult.trackLabel}`);
+          console.log('🔦 ========================================');
+          console.log(`🔦 ✅ FOUND TORCH-CAPABLE CAMERA!`);
+          console.log(`🔦 Camera: ${camera.label || torchResult.trackLabel}`);
+          console.log(`🔦 Device ID: ${camera.deviceId}`);
+          console.log('🔦 ========================================');
           
           const selectedCamera = {
             deviceId: camera.deviceId,
@@ -308,36 +379,71 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
             camera: selectedCamera
           });
           
+          console.log('🔦 Returning torch-capable camera:', selectedCamera);
           return selectedCamera;
+        } else {
+          console.log(`🔦 ❌ Camera does NOT support torch`);
+          console.log(`🔦   Reason: ${torchResult.error || 'No torch in capabilities'}`);
         }
       }
       
-      console.log('⚠️ No torch-capable back camera found, using first available camera');
+      console.log('\n🔦 ========================================');
+      console.log('🔦 ❌ NO TORCH-CAPABLE CAMERA FOUND');
+      console.log(`🔦 Tested ${targetCameras.length} camera(s), none have torch`);
+      console.log('🔦 ⚠️ CANNOT PROCEED - Torch required for back-side scan');
+      console.log('🔦 ========================================');
+      
+      await logToServer('torch-check-complete', 'No torch camera found - FAILING', {
+        testedCount: targetCameras.length,
+        message: 'No torch-capable back camera available - scan cannot proceed',
+        scanSide: scanSide
+      });
+      
+      // For back-side scan, torch is REQUIRED - return error
+      return { 
+        deviceId: null, 
+        hasTorch: false, 
+        facing: 'back', 
+        label: 'No torch camera', 
+        error: 'NO_TORCH_CAMERA',
+        message: 'Back-side card scanning requires a camera with flashlight support. No torch-capable camera found on this device.'
+      };
     }
     
-    // Return the first matching camera (without torch requirement)
-    const selectedCamera = targetCameras[0];
-    console.log(`📷 Selected camera: ${selectedCamera.label || 'Unknown'} (facing: ${selectedCamera.facing})`);
-    console.log(`📷 DeviceId from array: ${selectedCamera.deviceId || 'MISSING'}`);
+    // For front-side scan (no torch requirement), return first matching camera
+    if (scanSide === 'front' && targetCameras.length > 0) {
+      const selectedCamera = targetCameras[0];
+      console.log(`📷 Selected front camera: ${selectedCamera.label || 'Unknown'}`);
+      
+      const result = {
+        deviceId: selectedCamera.deviceId || null,
+        hasTorch: false,
+        facing: selectedCamera.facing,
+        label: selectedCamera.label || 'Unknown'
+      };
+      
+      await logToServer('camera-selection', 'Front camera selected (no torch needed)', {
+        camera: result
+      });
+      
+      return result;
+    }
     
-    const result = {
-      deviceId: selectedCamera.deviceId || null,
-      hasTorch: false,
-      facing: selectedCamera.facing,
-      label: selectedCamera.label || 'Unknown'
-    };
-    
-    console.log(`📷 Result deviceId: ${result.deviceId || 'NULL'}`);
-    
-    // Log to server
-    await logToServer('camera-selection', 'Camera selected (no torch)', {
-      camera: {
-        ...result,
-        deviceId: result.deviceId ? result.deviceId.substring(0, 12) + '...' : 'N/A'
-      }
+    // Fallback: No suitable camera found
+    console.log('❌ No suitable camera found');
+    await logToServer('camera-selection', 'No suitable camera found', {
+      scanSide,
+      targetCamerasCount: targetCameras.length
     });
     
-    return result;
+    return { 
+      deviceId: null, 
+      hasTorch: false, 
+      facing: 'unknown', 
+      label: 'No camera', 
+      error: 'NO_CAMERA',
+      message: 'No suitable camera found for scanning'
+    };
     
   } catch (error) {
     console.error('❌ Error finding best camera:', error);
@@ -467,12 +573,50 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
     console.log('📷 Searching for optimal camera...');
     const bestCamera = await findBestCameraForScan(scanSide);
     
+    // Step 3.1: Check if camera selection returned an error
+    if (bestCamera.error) {
+      console.log('❌ Camera selection failed:', bestCamera.error);
+      console.log('📝 Error message:', bestCamera.message);
+      
+      if (bestCamera.error === 'NO_TORCH_CAMERA' && scanSide === 'back') {
+        console.log('🔦 ❌ CRITICAL: No torch-capable camera available for back-side scan');
+        if (onPermissionDenied) {
+          onPermissionDenied('NO_TORCH_CAMERA', bestCamera.message);
+        }
+        throw new Error('NO_TORCH_CAMERA: ' + bestCamera.message);
+      }
+      
+      if (bestCamera.error === 'NO_CAMERA') {
+        console.log('📹 No camera device available');
+        if (onPermissionDenied) {
+          onPermissionDenied('NO_CAMERA');
+        }
+        throw new Error('NO_CAMERA');
+      }
+    }
+    
     console.log('📷 Best camera selection result:', {
       deviceId: bestCamera.deviceId ? bestCamera.deviceId.substring(0, 8) + '...' : 'default',
       label: bestCamera.label,
       hasTorch: bestCamera.hasTorch,
-      facing: bestCamera.facing
+      facing: bestCamera.facing,
+      error: bestCamera.error || 'none'
     });
+    
+    // Step 3.2: For back-side scan, verify torch capability
+    if (scanSide === 'back' && !bestCamera.hasTorch) {
+      console.log('🔦 ❌ CRITICAL: Selected camera does not have torch capability');
+      const errorMsg = 'Back-side card scanning requires a camera with flashlight. The selected camera does not support torch/flashlight.';
+      if (onPermissionDenied) {
+        onPermissionDenied('NO_TORCH_CAMERA', errorMsg);
+      }
+      throw new Error('NO_TORCH_CAMERA: ' + errorMsg);
+    }
+    
+    if (scanSide === 'back' && bestCamera.hasTorch) {
+      console.log('🔦 ✅ VERIFIED: Using torch-capable camera for back-side scan');
+      console.log(`🔦 Camera: ${bestCamera.label}`);
+    }
 
     // Step 4: Build constraints based on camera selection
     let constraints;
@@ -509,14 +653,26 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
     } catch (getUserMediaError) {
       console.error('❌ getUserMedia failed with specific constraints:', getUserMediaError);
       
-      // If specific device failed, try fallback to facingMode
-      if (bestCamera.deviceId) {
+      // For back-side scan with torch requirement, DO NOT fallback to facingMode
+      // This would potentially select a camera without torch
+      if (bestCamera.deviceId && bestCamera.hasTorch && scanSide === 'back') {
+        console.log('🔦 ❌ CRITICAL: Failed to access torch-capable camera');
+        console.log('🔦 ❌ Will NOT fallback to facingMode (might lose torch capability)');
+        const errorMsg = 'Failed to access the torch-capable camera. Cannot proceed with back-side scan without flashlight.';
+        if (onPermissionDenied) {
+          onPermissionDenied('TORCH_CAMERA_ACCESS_FAILED', errorMsg);
+        }
+        throw new Error('TORCH_CAMERA_ACCESS_FAILED: ' + errorMsg);
+      }
+      
+      // If specific device failed for non-torch scenarios, try fallback to facingMode
+      if (bestCamera.deviceId && scanSide === 'front') {
         console.log('🔄 Retrying with facingMode fallback...');
         const fallbackConstraints = {
           video: { 
             width: { ideal: 1280, min: 640, max: 1920 },
             height: { ideal: 720, min: 480, max: 1080 },
-            facingMode: scanSide === 'front' ? 'user' : 'environment'
+            facingMode: 'user'
           } 
         };
         
@@ -595,14 +751,36 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
       trackState: activeTrack.readyState,
       streamActive: stream.active,
       hasTorch: selectedCameraHasTorch,
-      scanSide: scanSide
+      scanSide: scanSide,
+      capabilities: capabilities
     });
+    
+    // CRITICAL VERIFICATION: For back-side scan, ensure torch is available
+    if (scanSide === 'back' && !selectedCameraHasTorch) {
+      console.log('🔦 ❌ CRITICAL VERIFICATION FAILED');
+      console.log('🔦 ❌ Stream obtained but camera does NOT have torch capability');
+      console.log('🔦 ❌ This should not happen - stopping stream');
+      
+      // Stop the stream immediately
+      stream.getTracks().forEach(track => track.stop());
+      
+      const errorMsg = 'Critical verification failed: The camera stream does not support torch/flashlight as required for back-side scanning.';
+      if (onPermissionDenied) {
+        onPermissionDenied('NO_TORCH_VERIFICATION_FAILED', errorMsg);
+      }
+      throw new Error('NO_TORCH_VERIFICATION_FAILED: ' + errorMsg);
+    }
+    
+    if (scanSide === 'back' && selectedCameraHasTorch) {
+      console.log('🔦 ✅✅ VERIFICATION PASSED: Torch capability confirmed on active stream');
+    }
 
     // Log final camera selection summary
     console.log('📷 === CAMERA SELECTION SUMMARY ===');
     console.log(`   Camera: ${selectedCameraLabel}`);
     console.log(`   Torch Support: ${selectedCameraHasTorch ? 'YES ✅' : 'NO ❌'}`);
     console.log(`   Scan Side: ${scanSide}`);
+    console.log(`   Device ID: ${selectedCameraDeviceId ? selectedCameraDeviceId.substring(0, 12) + '...' : 'N/A'}`);    console.log(`   Scan Side: ${scanSide}`);
     console.log(`   Device ID: ${selectedCameraDeviceId ? selectedCameraDeviceId.substring(0, 12) + '...' : 'N/A'}`);
     console.log('===================================');
 
