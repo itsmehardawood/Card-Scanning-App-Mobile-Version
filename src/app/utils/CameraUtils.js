@@ -275,7 +275,22 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
           continue;
         }
         
+        console.log(`🔦 Testing camera: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 12)}...)`);
+        
         const torchResult = await checkCameraTorchSupport(camera.deviceId);
+        
+        // Log torch test result to server
+        await logToServer('torch-test', `Torch test: ${camera.label}`, {
+          camera: {
+            label: camera.label,
+            deviceId: camera.deviceId,
+            facing: camera.facing
+          },
+          torchResult: {
+            supported: torchResult.supported,
+            error: torchResult.error
+          }
+        });
         
         if (torchResult.supported) {
           console.log(`✅ Found torch-capable camera: ${camera.label || torchResult.trackLabel}`);
@@ -303,6 +318,7 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     // Return the first matching camera (without torch requirement)
     const selectedCamera = targetCameras[0];
     console.log(`📷 Selected camera: ${selectedCamera.label || 'Unknown'} (facing: ${selectedCamera.facing})`);
+    console.log(`📷 DeviceId from array: ${selectedCamera.deviceId || 'MISSING'}`);
     
     const result = {
       deviceId: selectedCamera.deviceId || null,
@@ -311,9 +327,14 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       label: selectedCamera.label || 'Unknown'
     };
     
+    console.log(`📷 Result deviceId: ${result.deviceId || 'NULL'}`);
+    
     // Log to server
     await logToServer('camera-selection', 'Camera selected (no torch)', {
-      camera: result
+      camera: {
+        ...result,
+        deviceId: result.deviceId ? result.deviceId.substring(0, 12) + '...' : 'N/A'
+      }
     });
     
     return result;
