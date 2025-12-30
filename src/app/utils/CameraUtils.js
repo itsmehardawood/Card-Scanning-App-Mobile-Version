@@ -52,13 +52,17 @@ const isSamsungDevice = () => {
 // 🐛 DEBUG: Send logs to server for remote debugging
 const logToServer = async (type, message, data = {}) => {
   try {
-    // Only send in development or if explicitly enabled
-    const isDev = process.env.NODE_ENV === 'development';
-    const debugEnabled = typeof window !== 'undefined' && window.ENABLE_CAMERA_DEBUG;
+    // Always send logs (enabled for production debugging)
+    // To disable, set: window.DISABLE_CAMERA_DEBUG = true
+    const debugDisabled = typeof window !== 'undefined' && window.DISABLE_CAMERA_DEBUG;
     
-    if (!isDev && !debugEnabled) return;
+    if (debugDisabled) {
+      return;
+    }
     
-    await fetch('/securityscan/api/debug-camera', {
+    console.log(`📤 Sending to server: [${type}] ${message}`);
+    
+    const response = await fetch('/securityscan/api/debug-camera', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68,8 +72,13 @@ const logToServer = async (type, message, data = {}) => {
         timestamp: Date.now()
       })
     });
+    
+    if (!response.ok) {
+      console.warn(`⚠️ Debug log failed: ${response.status}`);
+    }
   } catch (error) {
-    // Silent fail - don't disrupt camera operations
+    // Log to console but don't disrupt camera operations
+    console.warn('⚠️ Could not send debug log to server:', error.message);
   }
 };
 
