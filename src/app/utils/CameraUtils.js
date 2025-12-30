@@ -264,10 +264,24 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     }
     
     // Classify all cameras
-    const classifiedCameras = devices.map(device => ({
-      ...device,
-      facing: classifyCameraFacing(device)
-    }));
+    const classifiedCameras = devices.map(device => {
+      // Explicitly extract properties to avoid any spread operator issues
+      const cameraObj = {
+        deviceId: device.deviceId,
+        groupId: device.groupId,
+        kind: device.kind,
+        label: device.label,
+        facing: classifyCameraFacing(device)
+      };
+      
+      console.log(`📷 Classifying camera: ${device.label}`, {
+        originalDeviceId: device.deviceId,
+        newObjDeviceId: cameraObj.deviceId,
+        deviceIdMatch: device.deviceId === cameraObj.deviceId
+      });
+      
+      return cameraObj;
+    });
     
     console.log('📷 Classified cameras:');
     classifiedCameras.forEach(cam => {
@@ -278,17 +292,24 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       label: c.label,
       deviceId: c.deviceId,
       facing: c.facing,
-      hasDeviceId: !!c.deviceId
+      hasDeviceId: !!c.deviceId,
+      deviceIdLength: c.deviceId ? c.deviceId.length : 0
     })));
     
     // Filter cameras based on scan side
     const targetFacing = scanSide === 'front' ? 'front' : 'back';
     let targetCameras = classifiedCameras.filter(cam => cam.facing === targetFacing);
     
+    console.log(`📷 After filtering for ${targetFacing}: ${targetCameras.length} cameras`);
+    targetCameras.forEach((cam, idx) => {
+      console.log(`  [${idx}] label=${cam.label}, deviceId=${cam.deviceId}, facing=${cam.facing}`);
+    });
+    
     // If no cameras match the target facing, include unknown cameras for back scan
     if (targetCameras.length === 0 && scanSide === 'back') {
       console.log('📷 No clearly back-facing cameras found, including unknown facing cameras');
       targetCameras = classifiedCameras.filter(cam => cam.facing !== 'front');
+      console.log(`📷 After including unknown: ${targetCameras.length} cameras`);
     }
     
     // If still no cameras, use all cameras
@@ -298,11 +319,14 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     }
     
     console.log(`📷 ${targetCameras.length} candidate camera(s) for ${scanSide}-side scan`);
+    console.log('📷 Target cameras RAW:', targetCameras);
     console.log('📷 Target cameras details:', targetCameras.map(c => ({
       label: c.label,
-      deviceId: c.deviceId ? c.deviceId.substring(0, 12) + '...' : 'MISSING',
+      deviceId: c.deviceId,
+      deviceIdShort: c.deviceId ? c.deviceId.substring(0, 12) + '...' : 'MISSING',
       facing: c.facing,
       hasDeviceId: !!c.deviceId,
+      deviceIdType: typeof c.deviceId,
       deviceIdLength: c.deviceId ? c.deviceId.length : 0
     })));
     
@@ -313,12 +337,26 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       console.log('🔦 ========================================');
       console.log(`🔦 Will test ${targetCameras.length} camera(s) for torch support`);
       
+      // Log each camera before sending to server
+      targetCameras.forEach((c, idx) => {
+        console.log(`🔦 Camera ${idx}: label=${c.label}, deviceId=${c.deviceId}, facing=${c.facing}`);
+      });
+      
+      const camerasForLog = targetCameras.map(c => {
+        const logObj = {
+          label: c.label || 'Unknown',
+          deviceId: c.deviceId || 'N/A',
+          facing: c.facing || 'unknown',
+          hasDeviceId: !!c.deviceId
+        };
+        console.log('🔦 Prepared for server log:', logObj);
+        return logObj;
+      });
+      
+      console.log('🔦 Sending to server:', JSON.stringify(camerasForLog, null, 2));
+      
       await logToServer('torch-check-start', `Testing ${targetCameras.length} cameras for torch`, {
-        cameras: targetCameras.map(c => ({
-          label: c.label,
-          deviceId: c.deviceId,
-          facing: c.facing
-        }))
+        cameras: camerasForLog
       });
       
       for (let i = 0; i < targetCameras.length; i++) {
