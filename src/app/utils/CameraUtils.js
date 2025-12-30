@@ -1,5 +1,4 @@
 
-
 /**
  * 🎯 CAMERA UTILITIES FOR CARD DETECTION
  * 
@@ -16,12 +15,24 @@
  * - Automatic permission re-request functionality
  * - Comprehensive error handling for mobile webview
  * - Enhanced WebView compatibility
+ * 
+ * MULTI-CAMERA SUPPORT:
+ * - Enumerates all video input devices
+ * - Filters back-facing vs front-facing cameras
+ * - Selects torch-capable camera for back-side card scanning
+ * - Falls back to default environment camera if no torch camera found
+ * - Enhanced Samsung multi-camera device support
  */
 
 // Camera Utilities for Card Detection
 
 // 🔒 CAPTURE LOCK: Prevents multiple simultaneous frame captures
 let isCapturing = false;
+
+// 📷 SELECTED CAMERA TRACKING: Track which camera was selected for torch support
+let selectedCameraDeviceId = null;
+let selectedCameraLabel = null;
+let selectedCameraHasTorch = false;
 
 // 🔍 WEBVIEW DETECTION
 const isWebView = () => {
@@ -30,6 +41,293 @@ const isWebView = () => {
   const isAndroidWebView = /Android/.test(userAgent) && (/wv/.test(userAgent) || window.AndroidInterface);
   
   return isIOSWebView || isAndroidWebView || window.ReactNativeWebView !== undefined;
+};
+
+// 📱 DEVICE TYPE DETECTION
+const isSamsungDevice = () => {
+  const userAgent = navigator.userAgent.toLowerCase();
+  return userAgent.includes('samsung') || userAgent.includes('sm-');
+};
+
+// 🐛 DEBUG: Send logs to server for remote debugging
+const logToServer = async (type, message, data = {}) => {
+  try {
+    // Only send in development or if explicitly enabled
+    const isDev = process.env.NODE_ENV === 'development';
+    const debugEnabled = typeof window !== 'undefined' && window.ENABLE_CAMERA_DEBUG;
+    
+    if (!isDev && !debugEnabled) return;
+    
+    await fetch('/securityscan/api/debug-camera', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type,
+        message,
+        ...data,
+        timestamp: Date.now()
+      })
+    });
+  } catch (error) {
+    // Silent fail - don't disrupt camera operations
+  }
+};
+
+// 📹 ENUMERATE ALL VIDEO INPUT DEVICES
+export const enumerateVideoDevices = async () => {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      console.log('📹 MediaDevices API not available');
+      return [];
+    }
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    
+    console.log(`📹 Found ${videoDevices.length} video input device(s):`);
+    videoDevices.forEach((device, index) => {
+      console.log(`  ${index + 1}. ${device.label || 'Unknown Camera'} (ID: ${device.deviceId.substring(0, 8)}...)`);
+    });
+    
+    return videoDevices;
+  } catch (error) {
+    console.error('❌ Error enumerating video devices:', error);
+    return [];
+  }
+};
+
+// 🔍 CLASSIFY CAMERA AS FRONT OR BACK FACING
+const classifyCameraFacing = (device) => {
+  const label = (device.label || '').toLowerCase();
+  
+  // Common back camera indicators
+  const backIndicators = ['back', 'rear', 'environment', 'main', 'wide', 'ultra', 'telephoto', 'macro', '후면', '뒤'];
+  // Common front camera indicators  
+  const frontIndicators = ['front', 'selfie', 'user', 'facetime', '전면', '앞'];
+  
+  for (const indicator of backIndicators) {
+    if (label.includes(indicator)) {
+      return 'back';
+    }
+  }
+  
+  for (const indicator of frontIndicators) {
+    if (label.includes(indicator)) {
+      return 'front';
+    }
+  }
+  
+  // If no clear indication, check for camera index patterns (camera 0 is usually back on Android)
+  if (label.includes('camera 0') || label.includes('camera2 0')) {
+    return 'back';
+  }
+  if (label.includes('camera 1') || label.includes('camera2 1')) {
+    return 'front';
+  }
+  
+  return 'unknown';
+};
+
+// 🔦 CHECK IF A SPECIFIC CAMERA SUPPORTS TORCH (by device ID)
+const checkCameraTorchSupport = async (deviceId) => {
+  let testStream = null;
+  try {
+    // Handle missing or invalid deviceId
+    if (!deviceId || typeof deviceId !== 'string' || deviceId.length === 0) {
+      console.log('🔦 Invalid device ID provided, skipping torch check');
+      return { supported: false, capabilities: null, error: 'INVALID_DEVICE_ID' };
+    }
+    
+    const deviceIdShort = deviceId.length > 8 ? deviceId.substring(0, 8) + '...' : deviceId;
+    console.log(`🔦 Testing torch support for device: ${deviceIdShort}`);
+    
+    // Get a minimal stream from this specific camera
+    testStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: { exact: deviceId },
+        width: { ideal: 320 },
+        height: { ideal: 240 }
+      }
+    });
+    
+    const videoTrack = testStream.getVideoTracks()[0];
+    if (!videoTrack) {
+      console.log('🔦 No video track obtained');
+      return { supported: false, capabilities: null };
+    }
+    
+    const capabilities = videoTrack.getCapabilities();
+    const hasTorch = capabilities && 'torch' in capabilities;
+    
+    console.log(`🔦 Camera ${deviceIdShort} torch support:`, hasTorch);
+    
+    return { 
+      supported: hasTorch, 
+      capabilities,
+      trackLabel: videoTrack.label 
+    };
+  } catch (error) {
+    const deviceIdShort = deviceId && deviceId.length > 8 ? deviceId.substring(0, 8) + '...' : (deviceId || 'unknown');
+    console.warn(`⚠️ Could not test torch for device ${deviceIdShort}:`, error.message);
+    return { supported: false, capabilities: null, error: error.message };
+  } finally {
+    // Always clean up the test stream
+    if (testStream) {
+      testStream.getTracks().forEach(track => track.stop());
+    }
+  }
+};
+
+// 📷 FIND BEST CAMERA FOR CARD SCANNING (with torch preference)
+export const findBestCameraForScan = async (scanSide = 'back') => {
+  console.log(`📷 Finding best camera for ${scanSide}-side card scan...`);
+  console.log(`📱 Device info: Samsung=${isSamsungDevice()}, WebView=${isWebView()}`);
+  
+  // Log to server for remote debugging
+  await logToServer('device-info', 'Camera scan started', {
+    deviceInfo: {
+      isSamsung: isSamsungDevice(),
+      isWebView: isWebView(),
+      userAgent: navigator.userAgent
+    },
+    extra: { scanSide }
+  });
+  
+  try {
+    // First, we need camera permission to see device labels
+    // Request minimal permission to enumerate devices with labels
+    let tempStream = null;
+    try {
+      tempStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: scanSide === 'front' ? 'user' : 'environment' } 
+      });
+    } catch (e) {
+      console.warn('⚠️ Could not get temp stream for device enumeration:', e.message);
+    }
+    
+    const devices = await enumerateVideoDevices();
+    
+    // Log all cameras to server
+    await logToServer('device-info', `Found ${devices.length} cameras`, {
+      cameras: devices.map(d => ({
+        label: d.label || 'Unknown',
+        deviceId: d.deviceId,
+        facing: classifyCameraFacing(d)
+      }))
+    });
+    
+    // Clean up temp stream
+    if (tempStream) {
+      tempStream.getTracks().forEach(track => track.stop());
+    }
+    
+    if (devices.length === 0) {
+      console.log('📷 No video devices found, will use default');
+      return { deviceId: null, hasTorch: false, facing: 'unknown', label: 'default' };
+    }
+    
+    // Classify all cameras
+    const classifiedCameras = devices.map(device => ({
+      ...device,
+      facing: classifyCameraFacing(device)
+    }));
+    
+    console.log('📷 Classified cameras:');
+    classifiedCameras.forEach(cam => {
+      console.log(`  - ${cam.label || 'Unknown'}: facing=${cam.facing}`);
+    });
+    
+    // Filter cameras based on scan side
+    const targetFacing = scanSide === 'front' ? 'front' : 'back';
+    let targetCameras = classifiedCameras.filter(cam => cam.facing === targetFacing);
+    
+    // If no cameras match the target facing, include unknown cameras for back scan
+    if (targetCameras.length === 0 && scanSide === 'back') {
+      console.log('📷 No clearly back-facing cameras found, including unknown facing cameras');
+      targetCameras = classifiedCameras.filter(cam => cam.facing !== 'front');
+    }
+    
+    // If still no cameras, use all cameras
+    if (targetCameras.length === 0) {
+      console.log('📷 No matching cameras found, using all available cameras');
+      targetCameras = classifiedCameras;
+    }
+    
+    console.log(`📷 ${targetCameras.length} candidate camera(s) for ${scanSide}-side scan`);
+    
+    // For back-side scan, prioritize torch-capable cameras
+    if (scanSide === 'back' && targetCameras.length > 0) {
+      console.log('🔦 Checking torch support on candidate cameras...');
+      
+      for (const camera of targetCameras) {
+        // Skip cameras without valid deviceId
+        if (!camera.deviceId || camera.deviceId.length === 0) {
+          console.log(`⏭️ Skipping camera "${camera.label || 'Unknown'}" - no valid deviceId`);
+          continue;
+        }
+        
+        const torchResult = await checkCameraTorchSupport(camera.deviceId);
+        
+        if (torchResult.supported) {
+          console.log(`✅ Found torch-capable camera: ${camera.label || torchResult.trackLabel}`);
+          
+          const selectedCamera = {
+            deviceId: camera.deviceId,
+            hasTorch: true,
+            facing: camera.facing,
+            label: camera.label || torchResult.trackLabel || 'Unknown',
+            capabilities: torchResult.capabilities
+          };
+          
+          // Log to server
+          await logToServer('camera-selection', 'Torch-capable camera found', {
+            camera: selectedCamera
+          });
+          
+          return selectedCamera;
+        }
+      }
+      
+      console.log('⚠️ No torch-capable back camera found, using first available camera');
+    }
+    
+    // Return the first matching camera (without torch requirement)
+    const selectedCamera = targetCameras[0];
+    console.log(`📷 Selected camera: ${selectedCamera.label || 'Unknown'} (facing: ${selectedCamera.facing})`);
+    
+    const result = {
+      deviceId: selectedCamera.deviceId || null,
+      hasTorch: false,
+      facing: selectedCamera.facing,
+      label: selectedCamera.label || 'Unknown'
+    };
+    
+    // Log to server
+    await logToServer('camera-selection', 'Camera selected (no torch)', {
+      camera: result
+    });
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error finding best camera:', error);
+    
+    // Log error to server
+    await logToServer('error', 'Camera selection failed', {
+      error: error.message
+    });
+    
+    return { deviceId: null, hasTorch: false, facing: 'unknown', label: 'default', error: error.message };
+  }
+};
+
+// 📷 GET SELECTED CAMERA INFO
+export const getSelectedCameraInfo = () => {
+  return {
+    deviceId: selectedCameraDeviceId,
+    label: selectedCameraLabel,
+    hasTorch: selectedCameraHasTorch
+  };
 };
 
 // 📱 ENHANCED CAMERA PERMISSIONS CHECK (WebView Compatible)
@@ -106,11 +404,13 @@ const verifyPermissionWithDevices = async () => {
   }
 };
 
-// 🎯 ENHANCED CAMERA INITIALIZATION WITH WEBVIEW SUPPORT
-export const initializeCamera = async (videoRef, onPermissionDenied = null) => {
+// 🎯 ENHANCED CAMERA INITIALIZATION WITH WEBVIEW SUPPORT AND MULTI-CAMERA SELECTION
+// scanSide: 'front' for front-side card scan (user-facing camera), 'back' for back-side card scan (environment camera)
+export const initializeCamera = async (videoRef, onPermissionDenied = null, scanSide = 'back') => {
   try {
     console.log('📹 Starting camera initialization...');
-    console.log('📱 WebView environment:', isWebView());
+    console.log(`📱 WebView environment: ${isWebView()}, Samsung device: ${isSamsungDevice()}`);
+    console.log(`🎯 Scan side: ${scanSide}`);
     
     // Step 1: Check current permission status
     const permissionStatus = await checkCameraPermissions();
@@ -133,52 +433,105 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null) => {
       throw new Error('NO_CAMERA');
     }
 
-    // Step 3: Attempt camera access (this will trigger permission prompt if needed)
+    // Step 3: Find the best camera for this scan side (with torch preference for back scan)
+    console.log('📷 Searching for optimal camera...');
+    const bestCamera = await findBestCameraForScan(scanSide);
+    
+    console.log('📷 Best camera selection result:', {
+      deviceId: bestCamera.deviceId ? bestCamera.deviceId.substring(0, 8) + '...' : 'default',
+      label: bestCamera.label,
+      hasTorch: bestCamera.hasTorch,
+      facing: bestCamera.facing
+    });
+
+    // Step 4: Build constraints based on camera selection
+    let constraints;
+    
+    if (bestCamera.deviceId) {
+      // Use specific device ID for the selected camera
+      constraints = {
+        video: {
+          deviceId: { exact: bestCamera.deviceId },
+          width: { ideal: 1280, min: 640, max: 1920 },
+          height: { ideal: 720, min: 480, max: 1080 }
+        }
+      };
+      console.log(`📹 Using specific camera: ${bestCamera.label} (torch: ${bestCamera.hasTorch})`);
+    } else {
+      // Fallback to facingMode if no specific device selected
+      const facingMode = scanSide === 'front' ? 'user' : 'environment';
+      constraints = {
+        video: { 
+          width: { ideal: 1280, min: 640, max: 1920 },
+          height: { ideal: 720, min: 480, max: 1080 },
+          facingMode: facingMode
+        } 
+      };
+      console.log(`📹 Using facingMode: ${facingMode} (no specific camera selected)`);
+    }
+
+    // Step 5: Attempt camera access
     console.log('📹 Requesting camera access...');
     
-    const constraints = {
-      video: { 
-        width: { ideal: 1280, min: 640, max: 1920 },
-        height: { ideal: 720, min: 480, max: 1080 },
-        facingMode: 'environment'
-      } 
-    };
-
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (getUserMediaError) {
-      console.error('❌ getUserMedia failed:', getUserMediaError);
+      console.error('❌ getUserMedia failed with specific constraints:', getUserMediaError);
       
-      // Handle specific WebView errors
-      if (getUserMediaError.name === 'NotAllowedError') {
-        console.log('🚫 Camera permission denied by user');
-        if (onPermissionDenied) {
-          onPermissionDenied('PERMISSION_DENIED');
+      // If specific device failed, try fallback to facingMode
+      if (bestCamera.deviceId) {
+        console.log('🔄 Retrying with facingMode fallback...');
+        const fallbackConstraints = {
+          video: { 
+            width: { ideal: 1280, min: 640, max: 1920 },
+            height: { ideal: 720, min: 480, max: 1080 },
+            facingMode: scanSide === 'front' ? 'user' : 'environment'
+          } 
+        };
+        
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          console.log('✅ Fallback to facingMode succeeded');
+          // Reset selected camera info since we're using fallback
+          selectedCameraDeviceId = null;
+          selectedCameraLabel = 'fallback';
+          selectedCameraHasTorch = false;
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError);
+          throw getUserMediaError; // Throw original error
         }
-        throw new Error('PERMISSION_DENIED');
-      } else if (getUserMediaError.name === 'NotFoundError') {
-        console.log('📹 No camera device found');
-        if (onPermissionDenied) {
-          onPermissionDenied('NO_CAMERA');
-        }
-        throw new Error('NO_CAMERA');
-      } else if (getUserMediaError.name === 'NotReadableError') {
-        console.log('📹 Camera in use by another application');
-        if (onPermissionDenied) {
-          onPermissionDenied('CAMERA_IN_USE');
-        }
-        throw new Error('CAMERA_IN_USE');
       } else {
-        console.log('❌ Generic camera error:', getUserMediaError.message);
-        if (onPermissionDenied) {
-          onPermissionDenied('GENERIC_ERROR');
+        // Handle specific WebView errors
+        if (getUserMediaError.name === 'NotAllowedError') {
+          console.log('🚫 Camera permission denied by user');
+          if (onPermissionDenied) {
+            onPermissionDenied('PERMISSION_DENIED');
+          }
+          throw new Error('PERMISSION_DENIED');
+        } else if (getUserMediaError.name === 'NotFoundError') {
+          console.log('📹 No camera device found');
+          if (onPermissionDenied) {
+            onPermissionDenied('NO_CAMERA');
+          }
+          throw new Error('NO_CAMERA');
+        } else if (getUserMediaError.name === 'NotReadableError') {
+          console.log('📹 Camera in use by another application');
+          if (onPermissionDenied) {
+            onPermissionDenied('CAMERA_IN_USE');
+          }
+          throw new Error('CAMERA_IN_USE');
+        } else {
+          console.log('❌ Generic camera error:', getUserMediaError.message);
+          if (onPermissionDenied) {
+            onPermissionDenied('GENERIC_ERROR');
+          }
+          throw new Error('CAMERA_ACCESS_FAILED');
         }
-        throw new Error('CAMERA_ACCESS_FAILED');
       }
     }
 
-    // Step 4: Validate stream
+    // Step 6: Validate stream
     if (!stream || !stream.active) {
       console.error('❌ Invalid stream received');
       if (onPermissionDenied) {
@@ -197,12 +550,31 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null) => {
       throw new Error('NO_VIDEO_TRACK');
     }
 
+    // Store selected camera info
+    const activeTrack = videoTracks[0];
+    selectedCameraDeviceId = bestCamera.deviceId || activeTrack.getSettings()?.deviceId || null;
+    selectedCameraLabel = activeTrack.label || bestCamera.label || 'Unknown Camera';
+    
+    // Check torch support on the actual active stream
+    const capabilities = activeTrack.getCapabilities();
+    selectedCameraHasTorch = capabilities && 'torch' in capabilities;
+
     console.log('✅ Camera stream obtained:', {
       trackCount: videoTracks.length,
-      trackLabel: videoTracks[0].label || 'Unknown Camera',
-      trackState: videoTracks[0].readyState,
-      streamActive: stream.active
+      trackLabel: selectedCameraLabel,
+      trackState: activeTrack.readyState,
+      streamActive: stream.active,
+      hasTorch: selectedCameraHasTorch,
+      scanSide: scanSide
     });
+
+    // Log final camera selection summary
+    console.log('📷 === CAMERA SELECTION SUMMARY ===');
+    console.log(`   Camera: ${selectedCameraLabel}`);
+    console.log(`   Torch Support: ${selectedCameraHasTorch ? 'YES ✅' : 'NO ❌'}`);
+    console.log(`   Scan Side: ${scanSide}`);
+    console.log(`   Device ID: ${selectedCameraDeviceId ? selectedCameraDeviceId.substring(0, 12) + '...' : 'N/A'}`);
+    console.log('===================================');
 
     // Step 5: Assign to video element and wait for it to be ready
     if (!videoRef.current) {
@@ -302,8 +674,9 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null) => {
 };
 
 // 🔄 RE-REQUEST CAMERA PERMISSIONS (Enhanced for WebView)
-export const requestCameraPermissions = async (videoRef, onPermissionDenied = null) => {
-  console.log('🔄 Re-requesting camera permissions (WebView compatible)...');
+// scanSide: 'front' for front-side card scan, 'back' for back-side card scan
+export const requestCameraPermissions = async (videoRef, onPermissionDenied = null, scanSide = 'back') => {
+  console.log(`🔄 Re-requesting camera permissions (WebView compatible) for ${scanSide}-side scan...`);
   
   try {
     // Step 1: Clean up any existing stream
@@ -315,6 +688,11 @@ export const requestCameraPermissions = async (videoRef, onPermissionDenied = nu
       });
       videoRef.current.srcObject = null;
     }
+    
+    // Reset selected camera tracking
+    selectedCameraDeviceId = null;
+    selectedCameraLabel = null;
+    selectedCameraHasTorch = false;
 
     // Step 2: Wait for cleanup (important in WebView)
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -323,11 +701,12 @@ export const requestCameraPermissions = async (videoRef, onPermissionDenied = nu
     console.log('🔄 Attempting fresh camera access...');
     
     // Try with minimal constraints first to trigger permission prompt
+    const facingMode = scanSide === 'front' ? 'user' : 'environment';
     const testStream = await navigator.mediaDevices.getUserMedia({
       video: { 
        width: 320, 
         height: 240,
-        facingMode: 'environment'
+        facingMode: facingMode
       }
     });
     
@@ -335,8 +714,8 @@ export const requestCameraPermissions = async (videoRef, onPermissionDenied = nu
     testStream.getTracks().forEach(track => track.stop());
     console.log('✅ Permission test successful');
 
-    // Step 4: Now initialize with full constraints
-    return await initializeCamera(videoRef, onPermissionDenied);
+    // Step 4: Now initialize with full constraints and camera selection
+    return await initializeCamera(videoRef, onPermissionDenied, scanSide);
     
   } catch (error) {
     console.error('❌ Camera permission re-request failed:', error);
@@ -352,9 +731,15 @@ export const requestCameraPermissions = async (videoRef, onPermissionDenied = nu
   }
 };
 
-// � CHECK TORCH SUPPORT
+// 🔦 CHECK TORCH SUPPORT (Enhanced for multi-camera)
 export const checkTorchSupport = async (videoRef) => {
   try {
+    // First check our tracked selection
+    if (selectedCameraHasTorch) {
+      console.log('🔦 Torch supported (from camera selection)');
+      return true;
+    }
+    
     if (!videoRef.current?.srcObject) {
       console.log('🔦 No video stream available for torch check');
       return false;
@@ -371,9 +756,13 @@ export const checkTorchSupport = async (videoRef) => {
     const capabilities = videoTrack.getCapabilities();
     const hasTorch = capabilities && 'torch' in capabilities;
     
+    // Update our tracked state
+    selectedCameraHasTorch = hasTorch;
+    
     console.log('🔦 Torch capability check:', {
       supported: hasTorch,
-      capabilities: capabilities
+      cameraLabel: videoTrack.label || selectedCameraLabel || 'Unknown',
+      capabilities: capabilities ? Object.keys(capabilities) : []
     });
     
     return hasTorch;
@@ -383,10 +772,11 @@ export const checkTorchSupport = async (videoRef) => {
   }
 };
 
-// 🔦 ENABLE TORCH/FLASHLIGHT
+// 🔦 ENABLE TORCH/FLASHLIGHT (Enhanced for multi-camera reliability)
 export const enableTorch = async (videoRef) => {
   try {
     console.log('🔦 Attempting to enable torch...');
+    console.log(`🔦 Selected camera: ${selectedCameraLabel || 'Unknown'}, Expected torch: ${selectedCameraHasTorch}`);
     
     if (!videoRef.current?.srcObject) {
       console.warn('⚠️ No video stream available');
@@ -401,46 +791,159 @@ export const enableTorch = async (videoRef) => {
       return { success: false, reason: 'NO_TRACK' };
     }
 
+    // Log current track info for debugging
+    console.log('🔦 Current video track:', {
+      label: videoTrack.label,
+      readyState: videoTrack.readyState,
+      muted: videoTrack.muted,
+      enabled: videoTrack.enabled
+    });
+
     // Check if torch is supported
     const capabilities = videoTrack.getCapabilities();
     const hasTorch = capabilities && 'torch' in capabilities;
     
     if (!hasTorch) {
-      console.warn('⚠️ Torch not supported on this device');
-      return { success: false, reason: 'NOT_SUPPORTED' };
+      console.warn('⚠️ Torch not supported on current camera:', videoTrack.label);
+      console.warn('⚠️ Available capabilities:', capabilities ? Object.keys(capabilities) : 'none');
+      
+      const result = { success: false, reason: 'NOT_SUPPORTED', cameraLabel: videoTrack.label };
+      
+      // Log to server
+      await logToServer('torch-test', 'Torch not supported', {
+        camera: {
+          label: videoTrack.label,
+          deviceId: selectedCameraDeviceId
+        },
+        torchResult: result
+      });
+      
+      // On Samsung devices, try switching to a torch-capable camera
+      if (isSamsungDevice()) {
+        console.log('📱 Samsung device detected - torch may be on a different camera lens');
+      }
+      
+      return { success: false, reason: 'NOT_SUPPORTED', cameraLabel: videoTrack.label };
     }
 
-    // Try to apply torch constraint
+    // Try to apply torch constraint using multiple methods for better compatibility
+    
+    // Method 1: Advanced constraints (most compatible)
     try {
       await videoTrack.applyConstraints({
         advanced: [{ torch: true }]
       });
       
-      console.log('✅ Torch enabled successfully via advanced constraints');
-      return { success: true, method: 'advanced' };
-    } catch (advancedError) {
-      console.warn('⚠️ Advanced torch constraint failed:', advancedError.message);
-      
-      // Fallback: Try basic constraint
-      try {
-        await videoTrack.applyConstraints({
-          torch: true
+      // Verify torch is actually enabled
+      const settings = videoTrack.getSettings();
+      if (settings.torch === true) {
+        console.log('✅ Torch enabled successfully via advanced constraints');
+        console.log(`🔦 Camera: ${videoTrack.label}`);
+        
+        const result = { success: true, method: 'advanced', cameraLabel: videoTrack.label };
+        
+        // Log success to server
+        await logToServer('success', 'Torch enabled successfully', {
+          camera: {
+            label: videoTrack.label,
+            deviceId: selectedCameraDeviceId
+          },
+          torchResult: result
         });
         
+        return result;
+      }
+    } catch (advancedError) {
+      console.warn('⚠️ Advanced torch constraint failed:', advancedError.message);
+    }
+    
+    // Method 2: Basic constraint (fallback)
+    try {
+      await videoTrack.applyConstraints({
+        torch: true
+      });
+      
+      const settings = videoTrack.getSettings();
+      if (settings.torch === true) {
         console.log('✅ Torch enabled successfully via basic constraint');
-        return { success: true, method: 'basic' };
-      } catch (basicError) {
-        console.error('❌ Basic torch constraint failed:', basicError.message);
-        return { success: false, reason: 'CONSTRAINT_FAILED', error: basicError.message };
+        console.log(`🔦 Camera: ${videoTrack.label}`);
+        
+        const result = { success: true, method: 'basic', cameraLabel: videoTrack.label };
+        
+        // Log success to server
+        await logToServer('success', 'Torch enabled (basic method)', {
+          camera: {
+            label: videoTrack.label,
+            deviceId: selectedCameraDeviceId
+          },
+          torchResult: result
+        });
+        
+        return result;
+      }
+    } catch (basicError) {
+      console.warn('⚠️ Basic torch constraint failed:', basicError.message);
+    }
+    
+    // Method 3: Try with ImageCapture API (some devices support this better)
+    if ('ImageCapture' in window) {
+      try {
+        const imageCapture = new ImageCapture(videoTrack);
+        const photoCapabilities = await imageCapture.getPhotoCapabilities();
+        
+        if (photoCapabilities.fillLightMode && photoCapabilities.fillLightMode.includes('flash')) {
+          console.log('🔦 ImageCapture flash mode available, but torch control may differ');
+        }
+      } catch (icError) {
+        console.warn('⚠️ ImageCapture API check failed:', icError.message);
       }
     }
+    
+    // Final verification
+    const finalSettings = videoTrack.getSettings();
+    if (finalSettings.torch === true) {
+      console.log('✅ Torch appears to be enabled (verified via settings)');
+      
+      const result = { success: true, method: 'verified', cameraLabel: videoTrack.label };
+      
+      await logToServer('success', 'Torch enabled (verified)', {
+        camera: {
+          label: videoTrack.label,
+          deviceId: selectedCameraDeviceId
+        },
+        torchResult: result
+      });
+      
+      return result;
+    }
+    
+    console.error('❌ All torch enable methods failed');
+    const failResult = { success: false, reason: 'ALL_METHODS_FAILED', cameraLabel: videoTrack.label };
+    
+    // Log failure to server
+    await logToServer('error', 'All torch enable methods failed', {
+      camera: {
+        label: videoTrack.label,
+        deviceId: selectedCameraDeviceId
+      },
+      torchResult: failResult
+    });
+    
+    return failResult;
+    
   } catch (error) {
     console.error('❌ Error enabling torch:', error);
+    
+    // Log error to server
+    await logToServer('error', 'Torch enable error', {
+      error: error.message
+    });
+    
     return { success: false, reason: 'ERROR', error: error.message };
   }
 };
 
-// 🔦 DISABLE TORCH/FLASHLIGHT
+// 🔦 DISABLE TORCH/FLASHLIGHT (Enhanced)
 export const disableTorch = async (videoRef) => {
   try {
     console.log('🔦 Disabling torch...');
@@ -456,6 +959,13 @@ export const disableTorch = async (videoRef) => {
       return { success: true, reason: 'NO_TRACK' };
     }
 
+    // Check current torch state first
+    const settings = videoTrack.getSettings();
+    if (settings.torch === false || settings.torch === undefined) {
+      console.log('🔦 Torch already off');
+      return { success: true, reason: 'ALREADY_OFF' };
+    }
+
     // Try to disable torch
     try {
       await videoTrack.applyConstraints({
@@ -463,9 +973,17 @@ export const disableTorch = async (videoRef) => {
       });
       console.log('✅ Torch disabled successfully');
       return { success: true };
-    } catch (error) {
-      console.warn('⚠️ Error disabling torch:', error.message);
-      return { success: false, error: error.message };
+    } catch (advancedError) {
+      console.warn('⚠️ Advanced torch disable failed, trying basic:', advancedError.message);
+      
+      try {
+        await videoTrack.applyConstraints({ torch: false });
+        console.log('✅ Torch disabled via basic constraint');
+        return { success: true, method: 'basic' };
+      } catch (basicError) {
+        console.warn('⚠️ Basic torch disable also failed:', basicError.message);
+        return { success: false, error: basicError.message };
+      }
     }
   } catch (error) {
     console.error('❌ Error in disableTorch:', error);
@@ -653,6 +1171,12 @@ export const cleanupCamera = async (videoRef) => {
     
     // 🔓 RESET CAPTURE LOCK on cleanup
     isCapturing = false;
+    
+    // Reset selected camera tracking
+    selectedCameraDeviceId = null;
+    selectedCameraLabel = null;
+    selectedCameraHasTorch = false;
+    
     console.log('📹 Camera cleanup completed and capture lock reset');
   } catch (error) {
     console.error('❌ Error during cleanup:', error);
@@ -912,15 +1436,21 @@ export const resetDebugFrameCount = () => {
   console.log('🔄 Debug frame counter reset');
 };
 
-// 🔧 DIAGNOSTIC UTILITIES
+// 🔧 DIAGNOSTIC UTILITIES (Enhanced with multi-camera info)
 export const getCameraDiagnostics = async (videoRef = null) => {
   const info = {
     isWebView: isWebView(),
+    isSamsung: isSamsungDevice(),
     userAgent: navigator.userAgent,
     hasMediaDevices: 'mediaDevices' in navigator,
     hasGetUserMedia: 'getUserMedia' in (navigator.mediaDevices || {}),
     hasPermissions: 'permissions' in navigator,
     hasEnumerateDevices: 'enumerateDevices' in (navigator.mediaDevices || {}),
+    selectedCamera: {
+      deviceId: selectedCameraDeviceId ? selectedCameraDeviceId.substring(0, 12) + '...' : null,
+      label: selectedCameraLabel,
+      hasTorch: selectedCameraHasTorch
+    }
   };
   
   try {
@@ -932,7 +1462,13 @@ export const getCameraDiagnostics = async (videoRef = null) => {
   try {
     if (navigator.mediaDevices?.enumerateDevices) {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      info.cameras = devices.filter(d => d.kind === 'videoinput').length;
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      info.cameraCount = cameras.length;
+      info.cameras = cameras.map(cam => ({
+        label: cam.label || 'Unknown',
+        deviceId: cam.deviceId ? cam.deviceId.substring(0, 8) + '...' : 'N/A',
+        facing: classifyCameraFacing(cam)
+      }));
     }
   } catch (error) {
     info.deviceEnumError = error.message;
@@ -949,8 +1485,10 @@ export const getCameraDiagnostics = async (videoRef = null) => {
         if (videoTrack) {
           const capabilities = videoTrack.getCapabilities();
           info.torchCapabilities = capabilities?.torch || null;
+          info.currentTrackLabel = videoTrack.label;
           const settings = videoTrack.getSettings();
           info.torchEnabled = settings?.torch || false;
+          info.deviceId = settings?.deviceId ? settings.deviceId.substring(0, 8) + '...' : 'N/A';
         }
       }
     } catch (error) {
@@ -958,5 +1496,25 @@ export const getCameraDiagnostics = async (videoRef = null) => {
     }
   }
   
+  console.log('🔧 Camera Diagnostics:', info);
   return info;
+};
+
+// 🔄 SWITCH CAMERA (utility to switch between front/back cameras)
+export const switchCamera = async (videoRef, targetSide = 'back', onPermissionDenied = null) => {
+  console.log(`🔄 Switching to ${targetSide} camera...`);
+  
+  try {
+    // Cleanup current camera
+    await cleanupCamera(videoRef);
+    
+    // Wait for cleanup
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Initialize with new camera
+    return await initializeCamera(videoRef, onPermissionDenied, targetSide);
+  } catch (error) {
+    console.error('❌ Error switching camera:', error);
+    throw error;
+  }
 };
