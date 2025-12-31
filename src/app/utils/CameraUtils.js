@@ -177,13 +177,41 @@ const checkCameraTorchSupport = async (deviceId) => {
     const capabilities = videoTrack.getCapabilities();
     console.log(`🔦 Capabilities:`, JSON.stringify(capabilities, null, 2));
     
-    const hasTorch = capabilities && 'torch' in capabilities;
+    // IMPORTANT: Don't trust capabilities API - many Android WebViews report wrong info
+    // Instead, actually TRY to enable torch and see if it works
+    console.log(`🔦 Attempting to enable torch (real test)...`);
     
-    console.log(`🔦 Camera ${deviceIdShort} torch support: ${hasTorch ? '✅ YES' : '❌ NO'}`);
+    let torchActuallySupported = false;
+    try {
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: true }]
+      });
+      
+      // Check if torch was actually enabled
+      const settings = videoTrack.getSettings();
+      torchActuallySupported = settings.torch === true;
+      
+      console.log(`🔦 Torch enable result: ${torchActuallySupported ? '✅ WORKS' : '❌ FAILED'}`);
+      console.log(`🔦 Settings.torch value:`, settings.torch);
+      
+      // Turn it back off
+      if (torchActuallySupported) {
+        await videoTrack.applyConstraints({
+          advanced: [{ torch: false }]
+        });
+        console.log(`🔦 Torch disabled after test`);
+      }
+    } catch (torchError) {
+      console.log(`🔦 Torch enable threw error: ${torchError.message}`);
+      torchActuallySupported = false;
+    }
+    
+    console.log(`🔦 Camera ${deviceIdShort} torch support: ${torchActuallySupported ? '✅ YES' : '❌ NO'}`);
+    console.log(`🔦 (Capabilities reported: ${capabilities?.torch})`);
     console.log(`🔦 ========================================`);
     
     return { 
-      supported: hasTorch, 
+      supported: torchActuallySupported, 
       capabilities,
       trackLabel: videoTrack.label 
     };
@@ -999,19 +1027,41 @@ export const checkTorchSupport = async (videoRef) => {
       return false;
     }
 
+    // Don't trust capabilities API - actually test torch
     const capabilities = videoTrack.getCapabilities();
-    const hasTorch = capabilities && 'torch' in capabilities;
+    console.log('🔦 Checking torch support (will test actual functionality)...');
     
-    // Update our tracked state
-    selectedCameraHasTorch = hasTorch;
+    let actualTorchSupport = false;
+    try {
+      // Try to enable torch briefly
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: true }]
+      });
+      
+      const settings = videoTrack.getSettings();
+      actualTorchSupport = settings.torch === true;
+      
+      // Turn it back off
+      if (actualTorchSupport) {
+        await videoTrack.applyConstraints({
+          advanced: [{ torch: false }]
+        });
+      }
+    } catch (error) {
+      console.log('🔦 Torch test failed:', error.message);
+      actualTorchSupport = false;
+    }
+    
+    selectedCameraHasTorch = actualTorchSupport;
     
     console.log('🔦 Torch capability check:', {
-      supported: hasTorch,
+      supported: actualTorchSupport,
       cameraLabel: videoTrack.label || selectedCameraLabel || 'Unknown',
-      capabilities: capabilities ? Object.keys(capabilities) : []
+      capabilitiesReported: capabilities?.torch,
+      actualTest: actualTorchSupport ? 'WORKS' : 'FAILED'
     });
     
-    return hasTorch;
+    return actualTorchSupport;
   } catch (error) {
     console.error('❌ Error checking torch support:', error);
     return false;
