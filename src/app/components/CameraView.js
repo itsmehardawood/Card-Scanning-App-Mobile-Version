@@ -128,23 +128,21 @@ const CameraView = ({
   return (
     <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
       <div className="relative overflow-hidden">
-        {/* Camera Video - ALWAYS rendered to keep ref valid, but hidden when showing captured image */}
+        {/* Camera Video - ALWAYS visible to maintain dimensions for cropping */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className={`w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover ${
-            capturedImage && (currentPhase === 'front' || currentPhase === 'back') ? 'hidden' : ''
-          }`}
+          className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
         />
         
-        {/* Show captured static image during scanning (overlays hidden video) */}
+        {/* Show captured static image during scanning (absolute positioned overlay) */}
         {capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
           <img
             src={capturedImage}
             alt="Captured card"
-            className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
+            className="absolute inset-0 w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover z-5"
           />
         )}
 

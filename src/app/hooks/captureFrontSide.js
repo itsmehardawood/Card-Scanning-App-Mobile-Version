@@ -173,9 +173,9 @@ export const captureAndSendFramesFront = async (
     onFramesCaptured();
   }
   
-  // STEP 7: Wait 4 seconds before starting scanning (success message will auto-hide)
-  console.log("⏱️ Waiting 4 seconds before starting scan (success message visible)...");
-  await new Promise(resolve => setTimeout(resolve, 3500));
+  // STEP 7: Wait 3 seconds before starting scanning (success message will auto-hide)
+  console.log("⏱️ Waiting 3 seconds before starting scan (success message visible)...");
+  await new Promise(resolve => setTimeout(resolve, 3000));
   
   console.log("🔄 Continuing with normal card detection using Frame #2...");
   
@@ -545,6 +545,6 @@ export const captureAndSendFramesFront = async (
           reject(new Error('Timeout: Network Error or No successful API responses received'));
         }
       }
-    }, 20000); // Reduced to 20 seconds timeout
+    }, 30000); // Reduced to 20 seconds timeout
   });
 };

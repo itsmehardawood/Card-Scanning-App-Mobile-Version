@@ -445,10 +445,10 @@ const CardDetectionApp = () => {
   const handleCapturedImage = (imageDataUrl) => {
     setCapturedImage(imageDataUrl);
     setShowCaptureSuccessMessage(true);
-    // Auto-hide message after 4 seconds
+    // Auto-hide message after 3 seconds
     setTimeout(() => {
       setShowCaptureSuccessMessage(false);
-    }, 5000);
+    }, 3000);
   };
 
   // Custom hook for detection logic - NOW WITH handleDetectionFailure parameter
@@ -571,7 +571,9 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjcwOTE5NDQsImV4cCI6MTc2NzA5NTU0NCwibmJmIjoxNzY3MDkxOTQ0LCJqdGkiOiJqYVVMS1N3RW1SMzFORjE0Iiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0._4z1mv5_VyjjwoycUks0KBr8FcvzxsS2CuWQq9IitqY",
+          authToken:"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjcyNDY4ODYsImV4cCI6MTc2NzI1MDQ4NiwibmJmIjoxNzY3MjQ2ODg2LCJqdGkiOiJzdGlJU3k3bGlLSEFjMUlzIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.EukqBO9x0O2rxPrp88QS4P7hucT5urz1rsy82P_N-00",
+          
+          
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -1135,7 +1137,7 @@ const CardDetectionApp = () => {
             // Show success message for 1 second before showing results
             setTimeout(() => {
               setCurrentPhase("results");
-            }, 500);
+            }, 100);
           } else {
             // 🛡️ Double check - if success was already received, don't process failure
             if (backSuccessReceivedRef.current) {

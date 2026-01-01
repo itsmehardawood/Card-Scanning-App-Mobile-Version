@@ -90,6 +90,9 @@ export async function POST(request) {
         } catch (e) {
           const unescaped = deviceInfoRaw.replace(/\\"/g, '"');
           deviceData = JSON.parse(unescaped);
+
+            console.log("✅ Device Info Found:", deviceData);
+
         }
 
         // --- 🛡️ SANITIZATION START 🛡️ ---

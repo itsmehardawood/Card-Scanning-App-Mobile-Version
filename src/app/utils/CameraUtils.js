@@ -26,6 +26,10 @@
 
 // Camera Utilities for Card Detection
 
+// 🧪 TEST MODE: Set to true to bypass torch requirements for laptop testing
+// In production, this should be false
+const TEST_MODE = true; // Set to false for production
+
 // 🔒 CAPTURE LOCK: Prevents multiple simultaneous frame captures
 let isCapturing = false;
 
@@ -456,6 +460,27 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       console.log('\n🔦 ========================================');
       console.log('🔦 ❌ NO TORCH-CAPABLE CAMERA FOUND');
       console.log(`🔦 Tested ${targetCameras.length} camera(s), none have torch`);
+      
+      if (TEST_MODE) {
+        console.log('🧪 TEST MODE ENABLED - Bypassing torch requirement');
+        console.log('🧪 Using first available back camera for testing');
+        const testCamera = targetCameras[0];
+        
+        await logToServer('torch-check-complete', 'No torch camera found - TEST MODE bypass', {
+          testedCount: targetCameras.length,
+          testMode: true,
+          selectedCamera: testCamera.label
+        });
+        
+        return {
+          deviceId: testCamera.deviceId || null,
+          hasTorch: false, // No torch in test mode
+          facing: testCamera.facing,
+          label: testCamera.label || 'Test Camera',
+          testMode: true
+        };
+      }
+      
       console.log('🔦 ⚠️ CANNOT PROCEED - Torch required for back-side scan');
       console.log('🔦 ========================================');
       
@@ -669,14 +694,19 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
       error: bestCamera.error || 'none'
     });
     
-    // Step 3.2: For back-side scan, verify torch capability
+    // Step 3.2: For back-side scan, verify torch capability (unless in TEST_MODE)
     if (scanSide === 'back' && !bestCamera.hasTorch) {
-      console.log('🔦 ❌ CRITICAL: Selected camera does not have torch capability');
-      const errorMsg = 'Back-side card scanning requires a camera with flashlight. The selected camera does not support torch/flashlight.';
-      if (onPermissionDenied) {
-        onPermissionDenied('NO_TORCH_CAMERA', errorMsg);
+      if (TEST_MODE) {
+        console.log('🧪 TEST MODE: Skipping torch verification for back-side scan');
+        console.log('🧪 Proceeding without torch capability for testing purposes');
+      } else {
+        console.log('🔦 ❌ CRITICAL: Selected camera does not have torch capability');
+        const errorMsg = 'Back-side card scanning requires a camera with flashlight. The selected camera does not support torch/flashlight.';
+        if (onPermissionDenied) {
+          onPermissionDenied('NO_TORCH_CAMERA', errorMsg);
+        }
+        throw new Error('NO_TORCH_CAMERA: ' + errorMsg);
       }
-      throw new Error('NO_TORCH_CAMERA: ' + errorMsg);
     }
     
     if (scanSide === 'back' && bestCamera.hasTorch) {
@@ -821,20 +851,25 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
       capabilities: capabilities
     });
     
-    // CRITICAL VERIFICATION: For back-side scan, ensure torch is available
+    // CRITICAL VERIFICATION: For back-side scan, ensure torch is available (unless in TEST_MODE)
     if (scanSide === 'back' && !selectedCameraHasTorch) {
-      console.log('🔦 ❌ CRITICAL VERIFICATION FAILED');
-      console.log('🔦 ❌ Stream obtained but camera does NOT have torch capability');
-      console.log('🔦 ❌ This should not happen - stopping stream');
-      
-      // Stop the stream immediately
-      stream.getTracks().forEach(track => track.stop());
-      
-      const errorMsg = 'Critical verification failed: The camera stream does not support torch/flashlight as required for back-side scanning.';
-      if (onPermissionDenied) {
-        onPermissionDenied('NO_TORCH_VERIFICATION_FAILED', errorMsg);
+      if (TEST_MODE) {
+        console.log('🧪 TEST MODE: Skipping torch verification on active stream');
+        console.log('🧪 Stream obtained without torch capability - allowed for testing');
+      } else {
+        console.log('🔦 ❌ CRITICAL VERIFICATION FAILED');
+        console.log('🔦 ❌ Stream obtained but camera does NOT have torch capability');
+        console.log('🔦 ❌ This should not happen - stopping stream');
+        
+        // Stop the stream immediately
+        stream.getTracks().forEach(track => track.stop());
+        
+        const errorMsg = 'Critical verification failed: The camera stream does not support torch/flashlight as required for back-side scanning.';
+        if (onPermissionDenied) {
+          onPermissionDenied('NO_TORCH_VERIFICATION_FAILED', errorMsg);
+        }
+        throw new Error('NO_TORCH_VERIFICATION_FAILED: ' + errorMsg);
       }
-      throw new Error('NO_TORCH_VERIFICATION_FAILED: ' + errorMsg);
     }
     
     if (scanSide === 'back' && selectedCameraHasTorch) {
@@ -1413,13 +1448,7 @@ const captureFrameInternal = (videoRef, canvasRef, resolve, reject) => {
   canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     
-    // console.log('📷 Starting frame capture:', {
-    //   videoWidth: video.videoWidth,
-    //   videoHeight: video.videoHeight,
-    //   canvasWidth: canvas.width,
-    //   canvasHeight: canvas.height,
-    //   isCapturing: true
-    // });
+ 
     
     // 🎨 DRAW VIDEO FRAME to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1553,17 +1582,30 @@ export const getCropCoordinates = (videoRef) => {
     const cropWidth = Math.round(relativeWidth * scaleX);
     const cropHeight = Math.round(relativeHeight * scaleY);
     
-    // Ensure crop area is within video bounds and has positive dimensions
-    const finalCropX = Math.max(0, Math.min(cropX, videoWidth - 1));
-    const finalCropY = Math.max(0, Math.min(cropY, videoHeight - 1));
-    const finalCropWidth = Math.max(1, Math.min(cropWidth, videoWidth - finalCropX));
-    const finalCropHeight = Math.max(1, Math.min(cropHeight, videoHeight - finalCropY));
+    // 📏 REDUCE ZOOM: Add padding around the crop area (50% less zoom)
+    // Instead of cropping exactly at the border, expand outward to capture more context
+    const paddingPercent = 0.09; // Add 13% padding on each side
+    const paddingX = Math.round(cropWidth * paddingPercent);
+    const paddingY = Math.round(cropHeight * paddingPercent);
     
-    console.log('📐 Crop coordinates calculated:', {
+    const expandedCropX = cropX - paddingX;
+    const expandedCropY = cropY - paddingY;
+    const expandedCropWidth = cropWidth + (paddingX * 2);
+    const expandedCropHeight = cropHeight + (paddingY * 2);
+    
+    // Ensure crop area is within video bounds and has positive dimensions
+    const finalCropX = Math.max(0, Math.min(expandedCropX, videoWidth - 1));
+    const finalCropY = Math.max(0, Math.min(expandedCropY, videoHeight - 1));
+    const finalCropWidth = Math.max(1, Math.min(expandedCropWidth, videoWidth - finalCropX));
+    const finalCropHeight = Math.max(1, Math.min(expandedCropHeight, videoHeight - finalCropY));
+    
+    console.log('📐 Crop coordinates calculated (with 15% padding to reduce zoom):', {
       screen: { x: relativeX, y: relativeY, w: relativeWidth, h: relativeHeight },
       video: { width: videoWidth, height: videoHeight },
       scale: { x: scaleX, y: scaleY },
-      crop: { x: finalCropX, y: finalCropY, w: finalCropWidth, h: finalCropHeight }
+      original: { x: cropX, y: cropY, w: cropWidth, h: cropHeight },
+      padding: { x: paddingX, y: paddingY },
+      expanded: { x: finalCropX, y: finalCropY, w: finalCropWidth, h: finalCropHeight }
     });
     
     return {
