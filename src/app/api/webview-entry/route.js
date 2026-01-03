@@ -372,7 +372,7 @@ export async function POST(request) {
         });
         cleanupSessions();
 
-        const baseUrl = "https://testmobile.cardnest.io";
+        const baseUrl = "https://mobile.cardnest.io";
         const redirectUrl = `${baseUrl}/securityscan?session=${sessionId}&source=post`;
 
         // console.log("🚀 Redirecting WITH data to:", redirectUrl);
@@ -392,7 +392,7 @@ export async function POST(request) {
       createdAt: Date.now(),
     });
 
-    const baseUrl = "https://testmobile.cardnest.io";
+    const baseUrl = "https://mobile.cardnest.io";
     const redirectUrl = `${baseUrl}/securityscan?session=${fallbackSessionId}&source=post&status=missing_device_info`;
 
     // console.log("🚀 Redirecting (Fallback) to:", redirectUrl);
@@ -400,7 +400,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("💥 SERVER ERROR:", error);
     return NextResponse.redirect(
-      "https://testmobile.cardnest.io/securityscan?error=server_error",
+      "https://mobile.cardnest.io/securityscan?error=server_error",
       302
     );
   }
