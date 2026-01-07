@@ -14,16 +14,61 @@ const VoiceVerification = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [recordingTime, setRecordingTime] = useState(0);
+  const [debugInfo, setDebugInfo] = useState("");
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // Detect if we're in a WebView
+  const isWebView = () => {
+    const ua = navigator.userAgent;
+    return ua.includes('wv') || ua.includes('WebView') || (window.Android !== undefined);
+  };
+
+  // Log to Android (if available) and console
+  const logToAndroid = (message, data = {}) => {
+    const logData = {
+      component: "VoiceVerification",
+      message,
+      timestamp: new Date().toISOString(),
+      ...data
+    };
+    
+    console.log(`🎤 ${message}`, data);
+    
+    // Send to client-log API for server-side logging
+    fetch('/securityscan/api/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData)
+    }).catch(err => console.error('Failed to log:', err));
+  };
+
+  // Log environment info on mount
+  useEffect(() => {
+    if (isOpen) {
+      logToAndroid("Voice Verification opened", {
+        isWebView: isWebView(),
+        userAgent: navigator.userAgent,
+        mediaDevices: !!navigator.mediaDevices,
+        getUserMedia: !!navigator.mediaDevices?.getUserMedia,
+        phoneNumber: phoneNumber ? "present" : "missing",
+        merchantId: merchantId || "missing"
+      });
+      setDebugInfo(`WebView: ${isWebView()}`);
+    }
+  }, [isOpen]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
@@ -34,49 +79,131 @@ const VoiceVerification = ({
   const startRecording = async () => {
     try {
       setError("");
+      logToAndroid("Starting recording attempt");
       
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if mediaDevices is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("MediaDevices API not supported");
+      }
+
+      logToAndroid("Requesting microphone access");
       
-      // Create MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream);
+      // Request microphone access with Android-compatible constraints
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        } 
+      });
+      
+      streamRef.current = stream;
+      logToAndroid("Microphone access granted", {
+        tracks: stream.getAudioTracks().length,
+        trackLabel: stream.getAudioTracks()[0]?.label
+      });
+      
+      // Determine best MIME type for Android WebView
+      let mimeType = 'audio/webm';
+      const supportedTypes = [
+        'audio/webm',
+        'audio/webm;codecs=opus',
+        'audio/mp4',
+        'audio/ogg',
+        'audio/wav'
+      ];
+      
+      for (const type of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          logToAndroid("Using MIME type", { mimeType });
+          break;
+        }
+      }
+      
+      // Create MediaRecorder with Android-compatible settings
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: 128000
+      });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          logToAndroid("Audio chunk received", { size: event.data.size });
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         setAudioBlob(audioBlob);
         setHasRecorded(true);
         
+        logToAndroid("Recording stopped", { 
+          blobSize: audioBlob.size,
+          blobType: audioBlob.type,
+          chunks: audioChunksRef.current.length
+        });
+        
         // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => {
+            track.stop();
+            logToAndroid("Track stopped", { label: track.label });
+          });
+          streamRef.current = null;
+        }
+      };
+
+      mediaRecorder.onerror = (event) => {
+        logToAndroid("MediaRecorder error", { error: event.error });
+        setError("Recording error occurred. Please try again.");
       };
 
       // Start recording
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Collect data every 100ms
       setIsRecording(true);
       setRecordingTime(0);
+      
+      logToAndroid("Recording started successfully", { 
+        state: mediaRecorder.state,
+        mimeType 
+      });
       
       // Start timer
       timerIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-      console.log("🎤 Recording started");
     } catch (err) {
-      console.error("❌ Error accessing microphone:", err);
-      setError("Unable to access microphone. Please enable microphone permissions.");
+      logToAndroid("Error accessing microphone", { 
+        error: err.message,
+        name: err.name,
+        stack: err.stack
+      });
+      
+      let errorMessage = "Unable to access microphone. ";
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMessage += "Please enable microphone permissions in your device settings and reload the page.";
+      } else if (err.name === 'NotFoundError') {
+        errorMessage += "No microphone found on your device.";
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += "Microphone is being used by another application.";
+      } else {
+        errorMessage += err.message;
+      }
+      
+      setError(errorMessage);
+      setDebugInfo(err.message);
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      logToAndroid("Stopping recording");
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
@@ -84,8 +211,6 @@ const VoiceVerification = ({
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-      
-      console.log("🎤 Recording stopped");
     }
   };
 
@@ -116,12 +241,21 @@ const VoiceVerification = ({
       const formData = new FormData();
       formData.append("user_id", phoneNumber);
       formData.append("merchant_id", merchantId);
-      formData.append("file", audioBlob, "voice_recording.webm");
+      
+      // Use appropriate file extension based on blob type
+      let fileName = "voice_recording.webm";
+      if (audioBlob.type.includes('mp4')) fileName = "voice_recording.mp4";
+      else if (audioBlob.type.includes('ogg')) fileName = "voice_recording.ogg";
+      else if (audioBlob.type.includes('wav')) fileName = "voice_recording.wav";
+      
+      formData.append("file", audioBlob, fileName);
 
-      console.log("📤 Submitting voice registration:", {
+      logToAndroid("Submitting voice registration", {
         user_id: phoneNumber,
         merchant_id: merchantId,
         file_size: audioBlob.size,
+        file_type: audioBlob.type,
+        file_name: fileName
       });
 
       // Send to API
@@ -130,9 +264,21 @@ const VoiceVerification = ({
         body: formData,
       });
 
+      const responseText = await response.text();
+      logToAndroid("API Response", { 
+        status: response.status, 
+        response: responseText 
+      });
+
       if (response.ok) {
-        const result = await response.json();
-        console.log("✅ Voice registration successful:", result);
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch {
+          result = { message: responseText };
+        }
+        
+        logToAndroid("Voice registration successful", result);
         
         // Call success callback
         if (onSuccess) {
@@ -142,12 +288,17 @@ const VoiceVerification = ({
         // Close popup
         onClose();
       } else {
-        const errorText = await response.text();
-        console.error("❌ Voice registration failed:", errorText);
-        setError("Voice registration failed. Please try again.");
+        logToAndroid("Voice registration failed", { 
+          status: response.status,
+          error: responseText 
+        });
+        setError(`Voice registration failed (${response.status}). Please try again.`);
       }
     } catch (err) {
-      console.error("❌ Error submitting voice registration:", err);
+      logToAndroid("Error submitting voice registration", { 
+        error: err.message,
+        stack: err.stack 
+      });
       setError("Failed to submit voice registration. Please check your connection.");
     } finally {
       setIsSubmitting(false);
@@ -155,7 +306,7 @@ const VoiceVerification = ({
   };
 
   const handleSkip = () => {
-    console.log("⏭️ User skipped voice verification");
+    logToAndroid("User skipped voice verification");
     onClose();
   };
 
@@ -170,6 +321,13 @@ const VoiceVerification = ({
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm text-center">{error}</p>
+          </div>
+        )}
+        
+        {/* Debug Info (only in development) */}
+        {debugInfo && process.env.NODE_ENV === 'development' && (
+          <div className="mb-4 p-2 bg-gray-100 border border-gray-300 rounded text-xs">
+            <p className="text-gray-600">{debugInfo}</p>
           </div>
         )}
           
