@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from "react";
 import ControlPanel from "./components/ControlPanel";
 import StatusInformation from "./components/StatusInfo";
 import CameraView from "./components/CameraView";
+import VoiceVerification from "./components/VoiceVerification";
 
 // Import utilities
 import {
@@ -85,6 +86,9 @@ const CardDetectionApp = () => {
 
   // Flashlight state
   const [flashlightEnabled, setFlashlightEnabled] = useState(false);
+
+  // Voice verification state
+  const [showVoiceVerification, setShowVoiceVerification] = useState(false);
 
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
@@ -184,6 +188,20 @@ const CardDetectionApp = () => {
       fetchMerchantDisplayInfo(Merchant);
     }
   }, [Merchant]);
+
+  // Trigger voice verification popup after successful scan
+  useEffect(() => {
+    if (currentPhase === "results" && finalOcrResults) {
+      console.log("✅ Scan completed successfully, showing voice verification after delay");
+      
+      // Show voice verification popup after 2-3 seconds
+      const timer = setTimeout(() => {
+        setShowVoiceVerification(true);
+      }, 2500); // 2.5 seconds delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentPhase, finalOcrResults]);
 
 
 
@@ -578,9 +596,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken:"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjcyNDY4ODYsImV4cCI6MTc2NzI1MDQ4NiwibmJmIjoxNzY3MjQ2ODg2LCJqdGkiOiJzdGlJU3k3bGlLSEFjMUlzIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.EukqBO9x0O2rxPrp88QS4P7hucT5urz1rsy82P_N-00",
-          
-          
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc3NzY1OTEsImV4cCI6MTc2Nzc4MDE5MSwibmJmIjoxNzY3Nzc2NTkxLCJqdGkiOiJRUk9DcWlDU09tbGpaNDdqIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.AKWoulc5zVFptCTK9JzB8yyaY9Mb7spS5lUij3rWcYA",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -1339,6 +1355,16 @@ const CardDetectionApp = () => {
     stopRequestedRef.current = false;
   };
 
+  const handleVoiceVerificationSuccess = (result) => {
+    console.log("✅ Voice verification completed successfully:", result);
+    // You can add additional logic here if needed
+  };
+
+  const handleVoiceVerificationClose = () => {
+    console.log("Voice verification popup closed");
+    setShowVoiceVerification(false);
+  };
+
   const handleFakeCardRetry = () => {
     console.log("🔄 Fake card retry - Restarting from phase:", fakeCardDetectedPhase);
     
@@ -1487,6 +1513,15 @@ const CardDetectionApp = () => {
           sessionId={sessionId}
           frontScanState={frontScanState}
           detectionActive={detectionActive}
+        />
+
+        {/* Voice Verification Popup */}
+        <VoiceVerification
+          isOpen={showVoiceVerification}
+          onClose={handleVoiceVerificationClose}
+          phoneNumber={localStorage.getItem("phoneNumber")}
+          merchantId={authData?.merchantId}
+          onSuccess={handleVoiceVerificationSuccess}
         />
 
         <footer className="text-center text-sm text-gray-400 mt-8">

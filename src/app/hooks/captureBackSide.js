@@ -67,7 +67,7 @@ export const captureAndSendFrames = async (
     formData.append('file', flashlightBlob, 'back_screen_check.jpg');
     
     console.log("📤 Sending back side flashlight frame to screen detection endpoint...");
-    const screenDetectResponse = await fetch('https://api.cardnest.io/screen-detect/detect-screen', {
+    const screenDetectResponse = await fetch('https://testscan.cardnest.io/screen-detect/detect-screen', {
       method: 'POST',
       body: formData
     });

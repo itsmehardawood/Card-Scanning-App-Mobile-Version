@@ -91,7 +91,7 @@ export const reportFailure = async (
       return;
     }
 
-    const apiUrl = `https://api.cardnest.io/report_failure`;
+    const apiUrl = `https://testscan.cardnest.io/report_failure`;
 
     const payload = {
       scan_id: scanId || "",
