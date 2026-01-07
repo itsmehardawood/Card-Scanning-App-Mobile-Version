@@ -79,7 +79,14 @@ export async function POST(request) {
       urlParams.get("device_info") ||
       urlParams.get("device_Info");
 
-
+    // 📋 LOG: Extracted Data from Android
+    console.log("\n" + "=".repeat(60));
+    console.log("📱 RECEIVED FROM ANDROID APP");
+    console.log("=".repeat(60));
+    console.log("✅ merchant_id:", merchantId);
+    console.log("✅ auth_token:", authToken);
+    console.log("✅ device_info (raw):", deviceInfoRaw ? "PRESENT" : "MISSING");
+    console.log("=".repeat(60) + "\n");
 
     // 3. PROCESS DEVICE INFO
     if (deviceInfoRaw && deviceInfoRaw.length > 0) {
@@ -90,10 +97,29 @@ export async function POST(request) {
         } catch (e) {
           const unescaped = deviceInfoRaw.replace(/\\"/g, '"');
           deviceData = JSON.parse(unescaped);
-
-            console.log("✅ Device Info Found:", deviceData);
-
         }
+
+        // 📋 LOG: Complete Device Info
+        console.log("\n" + "=".repeat(60));
+        console.log("📱 PARSED DEVICE INFO");
+        console.log("=".repeat(60));
+        console.log("🆔 DeviceId:", deviceData.DeviceId);
+        console.log("📱 Device Details:", JSON.stringify(deviceData.device, null, 2));
+        console.log("🌐 Network Info:", JSON.stringify(deviceData.network, null, 2));
+        console.log("📞 SIM Cards Count:", deviceData.sims?.length || 0);
+        if (deviceData.sims && deviceData.sims.length > 0) {
+          console.log("📞 SIM Details:");
+          deviceData.sims.forEach((sim, index) => {
+            console.log(`  SIM ${index + 1}:`);
+            console.log(`    📱 Phone Number (sim): ${sim.sim}`);
+            console.log(`    🏢 Carrier ID: ${sim.carrierId}`);
+            console.log(`    📡 MCC-MNC: ${sim.mccmnc}`);
+            console.log(`    💳 Type: ${sim.simType}`);
+            console.log(`    🔢 Subscription ID: ${sim.subscriptionId}`);
+          });
+        }
+        console.log("📍 Location:", deviceData.location ? JSON.stringify(deviceData.location, null, 2) : "Not provided");
+        console.log("=".repeat(60) + "\n");
 
         // --- 🛡️ SANITIZATION START 🛡️ ---
         // Fix: Ensure IPv4/IPv6 are arrays for Laravel
@@ -150,7 +176,7 @@ export async function POST(request) {
         });
         cleanupSessions();
 
-        const baseUrl = "https://mobile.cardnest.io";
+        const baseUrl = "https://testmobile.cardnest.io";
         const redirectUrl = `${baseUrl}/securityscan?session=${sessionId}&source=post`;
 
         // console.log("🚀 Redirecting WITH data to:", redirectUrl);
@@ -170,7 +196,7 @@ export async function POST(request) {
       createdAt: Date.now(),
     });
 
-    const baseUrl = "https://mobile.cardnest.io";
+    const baseUrl = "https://testmobile.cardnest.io";
     const redirectUrl = `${baseUrl}/securityscan?session=${fallbackSessionId}&source=post&status=missing_device_info`;
 
     // console.log("🚀 Redirecting (Fallback) to:", redirectUrl);
@@ -178,7 +204,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("💥 SERVER ERROR:", error);
     return NextResponse.redirect(
-      "https://mobile.cardnest.io/securityscan?error=server_error",
+      "https://testmobile.cardnest.io/securityscan?error=server_error",
       302
     );
   }
