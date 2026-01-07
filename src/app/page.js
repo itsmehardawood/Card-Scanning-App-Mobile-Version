@@ -528,7 +528,14 @@ const CardDetectionApp = () => {
               merchantId: sessionData.merchantId,
               authTokenLength: sessionData.authToken.length,
               authTokenPreview: sessionData.authToken.substring(0, 20) + "...",
+              phoneNumber: sessionData.phoneNumber || "Not provided",
             });
+
+            // Store phone number in localStorage if available
+            if (sessionData.phoneNumber) {
+              localStorage.setItem("phoneNumber", sessionData.phoneNumber);
+              console.log("📱 Phone number stored in localStorage:", sessionData.phoneNumber);
+            }
 
             const authObj = {
               merchantId: sessionData.merchantId,
