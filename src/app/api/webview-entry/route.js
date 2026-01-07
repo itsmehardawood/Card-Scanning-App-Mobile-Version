@@ -79,14 +79,12 @@ export async function POST(request) {
       urlParams.get("device_info") ||
       urlParams.get("device_Info");
 
-    // 📋 LOG: Extracted Data from Android
-    console.log("\n" + "=".repeat(60));
-    console.log("📱 RECEIVED FROM ANDROID APP");
-    console.log("=".repeat(60));
-    console.log("✅ merchant_id:", merchantId);
-    console.log("✅ auth_token:", authToken);
-    console.log("✅ device_info (raw):", deviceInfoRaw ? "PRESENT" : "MISSING");
-    console.log("=".repeat(60) + "\n");
+    // 📋 LOG: Data Presence Check
+    console.log("📱 Android Data:", {
+      merchant_id: merchantId ? "✅" : "❌",
+      auth_token: authToken ? "✅" : "❌",
+      device_info: deviceInfoRaw ? "✅" : "❌"
+    });
 
     // 3. PROCESS DEVICE INFO
     if (deviceInfoRaw && deviceInfoRaw.length > 0) {
@@ -99,27 +97,14 @@ export async function POST(request) {
           deviceData = JSON.parse(unescaped);
         }
 
-        // 📋 LOG: Complete Device Info
-        console.log("\n" + "=".repeat(60));
-        console.log("📱 PARSED DEVICE INFO");
-        console.log("=".repeat(60));
-        console.log("🆔 DeviceId:", deviceData.DeviceId);
-        console.log("📱 Device Details:", JSON.stringify(deviceData.device, null, 2));
-        console.log("🌐 Network Info:", JSON.stringify(deviceData.network, null, 2));
-        console.log("📞 SIM Cards Count:", deviceData.sims?.length || 0);
+        // Extract phone number from SIMs
+        let phoneNumber = null;
         if (deviceData.sims && deviceData.sims.length > 0) {
-          console.log("📞 SIM Details:");
-          deviceData.sims.forEach((sim, index) => {
-            console.log(`  SIM ${index + 1}:`);
-            console.log(`    📱 Phone Number (sim): ${sim.sim}`);
-            console.log(`    🏢 Carrier ID: ${sim.carrierId}`);
-            console.log(`    📡 MCC-MNC: ${sim.mccmnc}`);
-            console.log(`    💳 Type: ${sim.simType}`);
-            console.log(`    🔢 Subscription ID: ${sim.subscriptionId}`);
-          });
+          phoneNumber = deviceData.sims[0].sim;
+          console.log("📞 Phone Number Extracted:", phoneNumber);
         }
-        console.log("📍 Location:", deviceData.location ? JSON.stringify(deviceData.location, null, 2) : "Not provided");
-        console.log("=".repeat(60) + "\n");
+
+        console.log("✅ Device Info Parsed Successfully");
 
         // --- 🛡️ SANITIZATION START 🛡️ ---
         // Fix: Ensure IPv4/IPv6 are arrays for Laravel
@@ -172,6 +157,7 @@ export async function POST(request) {
         sessions.set(sessionId, {
           merchantId,
           authToken,
+          phoneNumber,
           createdAt: Date.now(),
         });
         cleanupSessions();
@@ -193,6 +179,7 @@ export async function POST(request) {
     sessions.set(fallbackSessionId, {
       merchantId,
       authToken,
+      phoneNumber: null,
       createdAt: Date.now(),
     });
 
