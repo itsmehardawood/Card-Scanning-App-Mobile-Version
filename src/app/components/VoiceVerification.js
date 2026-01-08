@@ -89,13 +89,16 @@ const VoiceVerification = ({
       setIsRetrying(false);
       logToAndroid("Starting recording attempt", { retryCount: currentRetry });
       
-      // CRITICAL: Stop camera before requesting microphone on first attempt
-      if (currentRetry === 0 && onCameraStop) {
-        logToAndroid("Stopping camera to free resources for microphone");
+      // CRITICAL: Stop camera on EVERY attempt to ensure resources are freed
+      // Android WebView may not release camera resources immediately
+      if (onCameraStop) {
+        logToAndroid("Stopping camera to free resources for microphone", { attempt: currentRetry });
         try {
           await onCameraStop();
-          // Wait for camera resources to be fully released
-          await new Promise(resolve => setTimeout(resolve, 800));
+          // Longer delay for Android WebView - increases with each retry
+          const waitTime = 1000 + (currentRetry * 500); // 1s, 1.5s, 2s, 2.5s
+          logToAndroid(`Waiting ${waitTime}ms for camera resources to release`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
           logToAndroid("Camera stopped successfully");
         } catch (stopError) {
           logToAndroid("Error stopping camera", { error: stopError.message });
@@ -110,13 +113,9 @@ const VoiceVerification = ({
 
       logToAndroid("Requesting microphone access");
       
-      // Request microphone access with Android-compatible constraints
+      // Request microphone access with simpler constraints for better Android compatibility
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        } 
+        audio: true // Use simple constraint for maximum compatibility
       });
       
       streamRef.current = stream;

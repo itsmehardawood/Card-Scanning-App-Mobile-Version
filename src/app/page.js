@@ -381,25 +381,39 @@ const CardDetectionApp = () => {
   };
 
   // Stop camera completely to free up resources for voice recording
-  const stopCameraForVoice = () => {
-    try {
-      const stream = videoRef.current?.srcObject;
-      if (stream) {
-        // Stop all tracks completely (not just disable)
-        stream.getTracks().forEach(track => {
-          track.stop();
-          console.log("⏹️ Camera track stopped for voice:", track.label);
-        });
-        // Clear the video source
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
+  const stopCameraForVoice = async () => {
+    return new Promise((resolve) => {
+      try {
+        console.log("📹 Stopping camera for voice recording...");
+        const stream = videoRef.current?.srcObject;
+        if (stream) {
+          // Stop all tracks completely (not just disable)
+          const tracks = stream.getTracks();
+          console.log(`   └─ Found ${tracks.length} track(s) to stop`);
+          
+          tracks.forEach(track => {
+            console.log(`   └─ Stopping track: ${track.kind} - ${track.label}`);
+            track.stop();
+          });
+          
+          // Clear the video source completely
+          if (videoRef.current) {
+            videoRef.current.srcObject = null;
+            videoRef.current.src = "";
+            videoRef.current.load(); // Force release of resources
+          }
+          
+          setIsCameraPaused(true);
+          console.log("✅ Camera fully stopped for voice recording");
+        } else {
+          console.log("⚠️ No camera stream to stop");
         }
-        setIsCameraPaused(true);
-        console.log("⏹️ Camera fully stopped for voice recording");
+        resolve();
+      } catch (error) {
+        console.error("❌ Error stopping camera:", error);
+        resolve(); // Resolve anyway to continue
       }
-    } catch (error) {
-      console.error("❌ Error stopping camera:", error);
-    }
+    });
   };
 
   // Restart camera after voice recording
