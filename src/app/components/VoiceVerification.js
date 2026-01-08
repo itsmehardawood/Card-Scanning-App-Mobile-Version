@@ -6,7 +6,8 @@ const VoiceVerification = ({
   onClose, 
   phoneNumber, 
   merchantId,
-  onSuccess 
+  onSuccess,
+  mode = "register" // "register" or "verify"
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecorded, setHasRecorded] = useState(false);
@@ -50,6 +51,7 @@ const VoiceVerification = ({
   useEffect(() => {
     if (isOpen) {
       logToAndroid("Voice Verification opened", {
+        mode: mode,
         isWebView: isWebView(),
         userAgent: navigator.userAgent,
         mediaDevices: !!navigator.mediaDevices,
@@ -57,9 +59,9 @@ const VoiceVerification = ({
         phoneNumber: phoneNumber ? "present" : "missing",
         merchantId: merchantId || "missing"
       });
-      setDebugInfo(`WebView: ${isWebView()}`);
+      setDebugInfo(`WebView: ${isWebView()} | Mode: ${mode}`);
     }
-  }, [isOpen]);
+  }, [isOpen, mode]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -250,7 +252,12 @@ const VoiceVerification = ({
       
       formData.append("file", audioBlob, fileName);
 
-      logToAndroid("Submitting voice registration", {
+      const apiEndpoint = mode === "verify" 
+        ? "https://testscan.cardnest.io/voice/verify"
+        : "https://testscan.cardnest.io/voice/register";
+
+      logToAndroid(`Submitting voice ${mode}`, {
+        endpoint: apiEndpoint,
         user_id: phoneNumber,
         merchant_id: merchantId,
         file_size: audioBlob.size,
@@ -259,7 +266,7 @@ const VoiceVerification = ({
       });
 
       // Send to API
-      const response = await fetch("https://testscan.cardnest.io/voice/register", {
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         body: formData,
       });
@@ -278,7 +285,7 @@ const VoiceVerification = ({
           result = { message: responseText };
         }
         
-        logToAndroid("Voice registration successful", result);
+        logToAndroid(`Voice ${mode} successful`, result);
         
         // Call success callback
         if (onSuccess) {
@@ -288,18 +295,18 @@ const VoiceVerification = ({
         // Close popup
         onClose();
       } else {
-        logToAndroid("Voice registration failed", { 
+        logToAndroid(`Voice ${mode} failed`, { 
           status: response.status,
           error: responseText 
         });
-        setError(`Voice registration failed (${response.status}). Please try again.`);
+        setError(`Voice ${mode} failed (${response.status}). Please try again.`);
       }
     } catch (err) {
-      logToAndroid("Error submitting voice registration", { 
+      logToAndroid(`Error submitting voice ${mode}`, { 
         error: err.message,
         stack: err.stack 
       });
-      setError("Failed to submit voice registration. Please check your connection.");
+      setError(`Failed to submit voice ${mode}. Please check your connection.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -332,23 +339,32 @@ const VoiceVerification = ({
         )}
           
           <h3 className="text-xl font-bold text-gray-900 mb-2">
-            Voice Verification
+            {mode === "verify" ? "Voice Verification" : "Voice Registration"}
           </h3>
           <p className="text-gray-600 text-sm">
-            For additional security, we need to verify and associate your voice with your account.
+            {mode === "verify" 
+              ? "Please verify your identity by speaking the phrase below."
+              : "For additional security, we need to verify and associate your voice with your account."
+            }
           </p>
         </div>
 
         {/* Instructions */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-blue-900 text-sm font-medium mb-2">
-            Please say this phrase 3 times clearly:
+            {mode === "verify" 
+              ? "Please say this phrase 1 time clearly:"
+              : "Please say this phrase 3 times clearly:"
+            }
           </p>
           <p className="text-blue-700 text-lg font-semibold text-center py-2">
             &ldquo;Today is Monday&rdquo;
           </p>
           <p className="text-blue-600 text-xs mt-2 text-center">
-            Click the button below and repeat the phrase 3 times in one recording
+            {mode === "verify"
+              ? "Click the button below and say the phrase 1 time to verify your identity"
+              : "Click the button below and repeat the phrase 3 times in one recording"
+            }
           </p>
         </div>
 

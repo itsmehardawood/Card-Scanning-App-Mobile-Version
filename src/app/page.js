@@ -90,6 +90,7 @@ const CardDetectionApp = () => {
 
   // Voice verification state
   const [showVoiceVerification, setShowVoiceVerification] = useState(false);
+  const [voiceVerificationMode, setVoiceVerificationMode] = useState("register"); // "register" or "verify"
 
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
@@ -1232,8 +1233,9 @@ const CardDetectionApp = () => {
                 // ⚠️ DO NOT set finalOcrResults here - data stays on server
                 // ⚠️ DO NOT expose encrypted_data to window object
                 
-                // Show success message briefly before voice verification
-                setTimeout(() => {
+                // Check voice registration status before showing verification
+                setTimeout(async () => {
+                  await checkVoiceRegistrationStatus();
                   setCurrentPhase("awaiting-voice-verification");
                   setShowVoiceVerification(true);
                 }, 100);
@@ -1437,6 +1439,47 @@ const CardDetectionApp = () => {
     setMaxAttemptsReached(false);
     setCurrentOperation("");
     stopRequestedRef.current = false;
+  };
+
+  // Check if user has already registered their voice
+  const checkVoiceRegistrationStatus = async () => {
+    const userId = authData?.phoneNumber;
+    
+    if (!userId) {
+      console.warn("⚠️ No phone number found, defaulting to registration mode");
+      setVoiceVerificationMode("register");
+      return;
+    }
+
+    try {
+      console.log(`🔍 Checking voice registration status for user: ${userId}`);
+      
+      const response = await fetch(
+        `https://admin.cardnest.io/api/voice/register/${userId}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Voice registration status:", data);
+        
+        // If status is true, user is already registered → use verify mode
+        // If status is false, user needs to register → use register mode
+        if (data.status === true) {
+          console.log("✅ User already registered - switching to VERIFY mode");
+          setVoiceVerificationMode("verify");
+        } else {
+          console.log("📝 User not registered - switching to REGISTER mode");
+          setVoiceVerificationMode("register");
+        }
+      } else {
+        console.warn("⚠️ Could not check registration status, defaulting to registration mode");
+        setVoiceVerificationMode("register");
+      }
+    } catch (error) {
+      console.error("❌ Error checking voice registration status:", error);
+      // Default to registration mode on error
+      setVoiceVerificationMode("register");
+    }
   };
 
   const handleVoiceVerificationSuccess = async (result) => {
@@ -1697,6 +1740,7 @@ const CardDetectionApp = () => {
           phoneNumber={localStorage.getItem("phoneNumber")}
           merchantId={authData?.merchantId}
           onSuccess={handleVoiceVerificationSuccess}
+          mode={voiceVerificationMode}
         />
 
         <footer className="text-center text-sm text-gray-400 mt-8">
