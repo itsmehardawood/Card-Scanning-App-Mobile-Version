@@ -200,8 +200,12 @@ const CardDetectionApp = () => {
       console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
       // Stop camera completely to free up audio resources for voice recording
       stopCameraForVoice();
-      // Voice verification popup is already shown in back scan success handler
-      // Data is secured on server and not accessible to Android until verification completes
+      
+      // Wait 500ms for camera to fully release resources before showing voice verification
+      setTimeout(() => {
+        console.log("✅ Camera resources released, showing voice verification popup");
+        setShowVoiceVerification(true);
+      }, 500);
     }
     
     if (currentPhase === "results" && finalOcrResults) {
@@ -1314,7 +1318,7 @@ const CardDetectionApp = () => {
                 setTimeout(async () => {
                   await checkVoiceRegistrationStatus();
                   setCurrentPhase("awaiting-voice-verification");
-                  setShowVoiceVerification(true);
+                  // Don't show voice verification here - it will be shown after camera stops
                 }, 100);
               } else {
                 throw new Error(data.error || 'Failed to store scan results');
