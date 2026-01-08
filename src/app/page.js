@@ -91,6 +91,7 @@ const CardDetectionApp = () => {
   // Voice verification state
   const [showVoiceVerification, setShowVoiceVerification] = useState(false);
   const [voiceVerificationMode, setVoiceVerificationMode] = useState("register"); // "register" or "verify"
+  const [isCameraPaused, setIsCameraPaused] = useState(false);
 
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
@@ -195,12 +196,18 @@ const CardDetectionApp = () => {
   useEffect(() => {
     if (currentPhase === "awaiting-voice-verification") {
       console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
+      // Pause camera to free up audio resources for voice recording
+      pauseCamera();
       // Voice verification popup is already shown in back scan success handler
       // Data is secured on server and not accessible to Android until verification completes
     }
     
     if (currentPhase === "results" && finalOcrResults) {
       console.log("✅ Voice verification completed AND results phase - data now accessible to Android");
+      // Resume camera if it was paused
+      if (isCameraPaused) {
+        resumeCamera();
+      }
     }
   }, [currentPhase, finalOcrResults]);
 
@@ -374,6 +381,40 @@ const CardDetectionApp = () => {
       }
     } catch (error) {
       console.error("❌ Error resetting zoom:", error);
+    }
+  };
+
+  // Pause camera to free up resources for voice recording
+  const pauseCamera = () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.enabled = false;
+          console.log("⏸️ Camera track paused:", track.label);
+        });
+        setIsCameraPaused(true);
+        console.log("⏸️ Camera paused for voice recording");
+      }
+    } catch (error) {
+      console.error("❌ Error pausing camera:", error);
+    }
+  };
+
+  // Resume camera after voice recording
+  const resumeCamera = () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.enabled = true;
+          console.log("▶️ Camera track resumed:", track.label);
+        });
+        setIsCameraPaused(false);
+        console.log("▶️ Camera resumed after voice recording");
+      }
+    } catch (error) {
+      console.error("❌ Error resuming camera:", error);
     }
   };
 
@@ -1560,6 +1601,11 @@ const CardDetectionApp = () => {
 
   const handleVoiceVerificationClose = () => {
     console.log("⚠️ Voice verification popup closed without completion");
+    
+    // Resume camera if it was paused
+    if (isCameraPaused) {
+      resumeCamera();
+    }
     
     if (secureResultId) {
       console.log(`🗑️ Discarding unverified result: ${secureResultId}`);

@@ -192,14 +192,14 @@ const VoiceVerification = ({
         errorMessage += "Please enable microphone permissions in your device settings and reload the page.";
       } else if (err.name === 'NotFoundError') {
         errorMessage += "No microphone found on your device.";
-      } else if (err.name === 'NotReadableError') {
-        errorMessage += "Microphone is being used by another application.";
+      } else if (err.name === 'NotReadableError' || err.message.includes('Could not start audio source')) {
+        errorMessage = "Unable to access microphone. The camera may be in use. Please ensure the camera is not being used by another process and try again.";
       } else {
         errorMessage += err.message;
       }
       
       setError(errorMessage);
-      setDebugInfo(err.message);
+      setDebugInfo(`${err.name}: ${err.message}`);
     }
   };
 
