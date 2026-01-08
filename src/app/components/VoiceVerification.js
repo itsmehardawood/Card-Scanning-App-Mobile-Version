@@ -16,6 +16,8 @@ const VoiceVerification = ({
   const [error, setError] = useState("");
   const [recordingTime, setRecordingTime] = useState(0);
   const [debugInfo, setDebugInfo] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -81,7 +83,8 @@ const VoiceVerification = ({
   const startRecording = async () => {
     try {
       setError("");
-      logToAndroid("Starting recording attempt");
+      setIsRetrying(false);
+      logToAndroid("Starting recording attempt", { retryCount });
       
       // Check if mediaDevices is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -183,23 +186,49 @@ const VoiceVerification = ({
       logToAndroid("Error accessing microphone", { 
         error: err.message,
         name: err.name,
-        stack: err.stack
+        stack: err.stack,
+        retryCount
       });
       
       let errorMessage = "Unable to access microphone. ";
       
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         errorMessage += "Please enable microphone permissions in your device settings and reload the page.";
+        setError(errorMessage);
+        setDebugInfo(`${err.name}: ${err.message}`);
       } else if (err.name === 'NotFoundError') {
         errorMessage += "No microphone found on your device.";
+        setError(errorMessage);
+        setDebugInfo(`${err.name}: ${err.message}`);
       } else if (err.name === 'NotReadableError' || err.message.includes('Could not start audio source')) {
-        errorMessage = "Unable to access microphone. The camera may be in use. Please ensure the camera is not being used by another process and try again.";
+        // Retry with increasing delays for audio source conflicts
+        if (retryCount < 3) {
+          const delay = (retryCount + 1) * 1000; // 1s, 2s, 3s
+          setIsRetrying(true);
+          errorMessage = `Camera/audio conflict detected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount + 1}/3)`;
+          setError(errorMessage);
+          setDebugInfo(`Retry ${retryCount + 1}: Waiting ${delay}ms`);
+          
+          logToAndroid("Retrying microphone access", { 
+            delay, 
+            attempt: retryCount + 1 
+          });
+          
+          setTimeout(() => {
+            setRetryCount(retryCount + 1);
+            startRecording();
+          }, delay);
+        } else {
+          errorMessage = "Unable to access microphone after multiple attempts. The camera may be blocking audio access. Please try closing and reopening the app.";
+          setError(errorMessage);
+          setDebugInfo(`${err.name}: ${err.message} (Max retries reached)`);
+          setRetryCount(0);
+        }
       } else {
         errorMessage += err.message;
+        setError(errorMessage);
+        setDebugInfo(`${err.name}: ${err.message}`);
       }
-      
-      setError(errorMessage);
-      setDebugInfo(`${err.name}: ${err.message}`);
     }
   };
 
@@ -220,6 +249,7 @@ const VoiceVerification = ({
     if (isRecording) {
       stopRecording();
     } else {
+      setRetryCount(0); // Reset retry count on new recording attempt
       startRecording();
     }
   };
@@ -386,15 +416,26 @@ const VoiceVerification = ({
           </div>
         )}
 
+        {/* Retry Status */}
+        {isRetrying && !isRecording && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-yellow-700 text-sm text-center">
+              ⏳ Retrying microphone access...
+            </p>
+          </div>
+        )}
+
       
 
         {/* Record Button */}
         <button
           onClick={handleRecordClick}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isRetrying}
           className={`w-full py-4 rounded-lg font-semibold text-white transition-all mb-3 ${
             isRecording
               ? "bg-red-600 hover:bg-red-700 animate-pulse"
+              : isRetrying
+              ? "bg-yellow-500 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700"
           }`}
         >

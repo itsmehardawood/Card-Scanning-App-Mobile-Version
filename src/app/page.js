@@ -198,22 +198,14 @@ const CardDetectionApp = () => {
   useEffect(() => {
     if (currentPhase === "awaiting-voice-verification") {
       console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
-      // Stop camera completely to free up audio resources for voice recording
-      stopCameraForVoice();
-      
-      // Wait 500ms for camera to fully release resources before showing voice verification
-      setTimeout(() => {
-        console.log("✅ Camera resources released, showing voice verification popup");
-        setShowVoiceVerification(true);
-      }, 500);
+      // Show voice verification popup
+      // NOTE: Not stopping camera - allowing both camera and mic to run simultaneously
+      // If Android WebView has issues, the VoiceVerification component will handle retries
+      setShowVoiceVerification(true);
     }
     
     if (currentPhase === "results" && finalOcrResults) {
       console.log("✅ Voice verification completed AND results phase - data now accessible to Android");
-      // Restart camera if it was stopped for voice recording
-      if (isCameraPaused) {
-        restartCameraAfterVoice();
-      }
     }
   }, [currentPhase, finalOcrResults]);
 
@@ -1638,13 +1630,8 @@ const CardDetectionApp = () => {
     }
   };
 
-  const handleVoiceVerificationClose = async () => {
+  const handleVoiceVerificationClose = () => {
     console.log("⚠️ Voice verification popup closed without completion");
-    
-    // Restart camera if it was stopped
-    if (isCameraPaused) {
-      await restartCameraAfterVoice();
-    }
     
     if (secureResultId) {
       console.log(`🗑️ Discarding unverified result: ${secureResultId}`);
