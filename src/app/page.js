@@ -92,6 +92,7 @@ const CardDetectionApp = () => {
   const [showVoiceVerification, setShowVoiceVerification] = useState(false);
   const [voiceVerificationMode, setVoiceVerificationMode] = useState("register"); // "register" or "verify"
   const [isCameraPaused, setIsCameraPaused] = useState(false);
+  const [cameraHidden, setCameraHidden] = useState(false); // Hide camera during voice verification
 
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
@@ -384,30 +385,41 @@ const CardDetectionApp = () => {
   const stopCameraForVoice = async () => {
     return new Promise((resolve) => {
       try {
-        console.log("📹 Stopping camera for voice recording...");
+        console.log("📹 === STOPPING CAMERA FOR VOICE VERIFICATION ===");
+        
+        // 1. Stop detection loops FIRST
+        console.log("   └─ Stopping detection loops...");
+        stopRequestedRef.current = true;
+        setDetectionActive(false);
+        
+        // 2. Stop all camera tracks
         const stream = videoRef.current?.srcObject;
         if (stream) {
-          // Stop all tracks completely (not just disable)
           const tracks = stream.getTracks();
           console.log(`   └─ Found ${tracks.length} track(s) to stop`);
           
           tracks.forEach(track => {
-            console.log(`   └─ Stopping track: ${track.kind} - ${track.label}`);
+            console.log(`      └─ Stopping: ${track.kind} - ${track.label}`);
             track.stop();
           });
-          
-          // Clear the video source completely
-          if (videoRef.current) {
-            videoRef.current.srcObject = null;
-            videoRef.current.src = "";
-            videoRef.current.load(); // Force release of resources
-          }
-          
-          setIsCameraPaused(true);
-          console.log("✅ Camera fully stopped for voice recording");
         } else {
-          console.log("⚠️ No camera stream to stop");
+          console.log("   └─ No camera stream to stop");
         }
+        
+        // 3. Clear video element completely
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+          videoRef.current.src = "";
+          videoRef.current.load();
+          console.log("   └─ Video element cleared");
+        }
+        
+        // 4. Hide camera UI
+        setCameraHidden(true);
+        setIsCameraPaused(true);
+        console.log("   └─ Camera UI hidden");
+        
+        console.log("✅ Camera fully stopped and hidden");
         resolve();
       } catch (error) {
         console.error("❌ Error stopping camera:", error);
@@ -419,16 +431,27 @@ const CardDetectionApp = () => {
   // Restart camera after voice recording
   const restartCameraAfterVoice = async () => {
     try {
-      console.log("🔄 Restarting camera after voice recording...");
+      console.log("🔄 === RESTARTING CAMERA AFTER VOICE VERIFICATION ===");
       
-      // Determine which side we're scanning based on current phase
+      // 1. Show camera UI again
+      setCameraHidden(false);
+      console.log("   └─ Camera UI shown");
+      
+      // 2. Small delay before reinitializing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 3. Determine which side we're scanning based on current phase
       const scanSide = currentPhase === "awaiting-front-card" ? "front" : "back";
-      console.log(`   └─ Scan side: ${scanSide}`);
+      console.log(`   └─ Reinitializing ${scanSide} camera`);
       
-      // Reinitialize camera with correct side
+      // 4. Reset stop flag to allow detection
+      stopRequestedRef.current = false;
+      
+      // 5. Reinitialize camera with correct side
       await initializeCamera(videoRef, handleCameraPermissionError, scanSide);
       setIsCameraPaused(false);
-      console.log("✅ Camera restarted successfully after voice recording");
+      
+      console.log("✅ Camera restarted successfully");
     } catch (error) {
       console.error("❌ Error restarting camera:", error);
       setCameraError('Failed to restart camera. Please refresh the page.');
@@ -1757,19 +1780,21 @@ const CardDetectionApp = () => {
           </div>
         )}
 
-        <CameraView
-          videoRef={videoRef}
-          canvasRef={canvasRef}
-          currentPhase={currentPhase}
-          countdown={countdown}
-          detectionActive={detectionActive}
-          frontScanState={frontScanState}
-          isProcessing={isProcessing}
-          showPromptText={showPromptText}
-          promptText={promptText}
-          capturedImage={capturedImage}
-          showCaptureSuccessMessage={showCaptureSuccessMessage}
-        />
+        {!cameraHidden && (
+          <CameraView
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            currentPhase={currentPhase}
+            countdown={countdown}
+            detectionActive={detectionActive}
+            frontScanState={frontScanState}
+            isProcessing={isProcessing}
+            showPromptText={showPromptText}
+            promptText={promptText}
+            capturedImage={capturedImage}
+            showCaptureSuccessMessage={showCaptureSuccessMessage}
+          />
+        )}
 
         <ControlPanel
           currentPhase={currentPhase}
