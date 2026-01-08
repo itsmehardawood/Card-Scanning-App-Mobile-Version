@@ -7,7 +7,9 @@ const VoiceVerification = ({
   phoneNumber, 
   merchantId,
   onSuccess,
-  mode = "register" // "register" or "verify"
+  mode = "register", // "register" or "verify"
+  onCameraStop = null, // Callback to stop camera before mic access
+  onCameraRestart = null // Callback to restart camera after recording
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecorded, setHasRecorded] = useState(false);
@@ -86,6 +88,20 @@ const VoiceVerification = ({
       setError("");
       setIsRetrying(false);
       logToAndroid("Starting recording attempt", { retryCount: currentRetry });
+      
+      // CRITICAL: Stop camera before requesting microphone on first attempt
+      if (currentRetry === 0 && onCameraStop) {
+        logToAndroid("Stopping camera to free resources for microphone");
+        try {
+          await onCameraStop();
+          // Wait for camera resources to be fully released
+          await new Promise(resolve => setTimeout(resolve, 800));
+          logToAndroid("Camera stopped successfully");
+        } catch (stopError) {
+          logToAndroid("Error stopping camera", { error: stopError.message });
+          // Continue anyway - try to get mic access
+        }
+      }
       
       // Check if mediaDevices is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
