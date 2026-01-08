@@ -407,8 +407,12 @@ const CardDetectionApp = () => {
     try {
       console.log("🔄 Restarting camera after voice recording...");
       
-      // Reinitialize camera
-      await initializeCamera(videoRef, handleCameraPermissionError);
+      // Determine which side we're scanning based on current phase
+      const scanSide = currentPhase === "awaiting-front-card" ? "front" : "back";
+      console.log(`   └─ Scan side: ${scanSide}`);
+      
+      // Reinitialize camera with correct side
+      await initializeCamera(videoRef, handleCameraPermissionError, scanSide);
       setIsCameraPaused(false);
       console.log("✅ Camera restarted successfully after voice recording");
     } catch (error) {
@@ -1586,6 +1590,9 @@ const CardDetectionApp = () => {
         setSecureResultId(null);
         setShowVoiceVerification(false);
         
+        // Restart camera after successful voice verification
+        await restartCameraAfterVoice();
+        
       } else if (finalData.status === "pending_voice_verification") {
         throw new Error("Verification not recorded on server");
       } else {
@@ -1601,6 +1608,11 @@ const CardDetectionApp = () => {
 
   const handleVoiceVerificationClose = () => {
     console.log("⚠️ Voice verification popup closed without completion");
+    
+    // Restart camera when closing popup
+    restartCameraAfterVoice().catch(err => 
+      console.error("Failed to restart camera on close:", err)
+    );
     
     if (secureResultId) {
       console.log(`🗑️ Discarding unverified result: ${secureResultId}`);
@@ -1783,6 +1795,8 @@ const CardDetectionApp = () => {
           merchantId={authData?.merchantId}
           onSuccess={handleVoiceVerificationSuccess}
           mode={voiceVerificationMode}
+          onCameraStop={stopCameraForVoice}
+          onCameraRestart={restartCameraAfterVoice}
         />
 
         <footer className="text-center text-sm text-gray-400 mt-8">
