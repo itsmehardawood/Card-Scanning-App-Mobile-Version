@@ -250,11 +250,11 @@ const VoiceVerification = ({
 
   const handleRecordClick = () => {
     if (isRecording) {
-      stopRecoAttempt(0); // Reset retry count on new recording attempt
+      stopRecording();
+    } else {
+      setRetryAttempt(0); // Reset retry count on new recording attempt
       setIsRetrying(false);
       startRecording(0); // Start with retry count 0
-      setRetryCount(0); // Reset retry count on new recording attempt
-      startRecording();
     }
   };
 
