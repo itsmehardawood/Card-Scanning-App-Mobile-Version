@@ -89,6 +89,26 @@ const VoiceVerification = ({
       setIsRetrying(false);
       logToAndroid("Starting recording attempt", { retryCount: currentRetry });
       
+      // FIRST: Check if microphone permissions are available at all
+      if (currentRetry === 0) {
+        logToAndroid("Checking microphone permissions before stopping camera");
+        
+        // Try to check permissions API if available
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const micPermission = await navigator.permissions.query({ name: 'microphone' });
+            logToAndroid("Microphone permission state", { state: micPermission.state });
+            
+            if (micPermission.state === 'denied') {
+              throw new Error("PERMISSION_DENIED: Microphone permission is denied in system settings. Please enable microphone access for this app.");
+            }
+          } catch (permError) {
+            logToAndroid("Permission check not supported or failed", { error: permError.message });
+            // Continue - some browsers don't support permissions API
+          }
+        }
+      }
+      
       // CRITICAL: Stop camera on EVERY attempt to ensure resources are freed
       // Android WebView may not release camera resources immediately
       if (onCameraStop) {
@@ -208,14 +228,32 @@ const VoiceVerification = ({
       
       let errorMessage = "Unable to access microphone. ";
       
+      // Check if this is a permission issue that needs to be handled in Android manifest
+      if (err.message.includes('PERMISSION_DENIED')) {
+        setError(err.message);
+        setDebugInfo(`Permission denied at system level`);
+        setIsRetrying(false);
+        setRetryAttempt(0);
+        return;
+      }
+      
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage += "Please enable microphone permissions in your device settings and reload the page.";
+        errorMessage = "⚠️ MICROPHONE PERMISSION DENIED\n\n";
+        errorMessage += "The Android app does not have microphone permission.\n\n";
+        errorMessage += "SOLUTION:\n";
+        errorMessage += "1. Ask the Android developer to add this to AndroidManifest.xml:\n";
+        errorMessage += "   <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n";
+        errorMessage += "2. Or go to Android Settings → Apps → [App Name] → Permissions → Enable Microphone";
         setError(errorMessage);
         setDebugInfo(`${err.name}: ${err.message}`);
+        setIsRetrying(false);
+        setRetryAttempt(0);
       } else if (err.name === 'NotFoundError') {
         errorMessage += "No microphone found on your device.";
         setError(errorMessage);
         setDebugInfo(`${err.name}: ${err.message}`);
+        setIsRetrying(false);
+        setRetryAttempt(0);
       } else if (err.name === 'NotReadableError' || err.message.includes('Could not start audio source')) {
         // Retry with increasing delays for audio source conflicts
         const nextRetry = currentRetry + 1;
@@ -236,7 +274,15 @@ const VoiceVerification = ({
             startRecording(nextRetry); // Pass the new retry count directly
           }, delay);
         } else {
-          errorMessage = "Unable to access microphone after 3 attempts. The camera may be blocking audio access. Please try closing and reopening the app.";
+          errorMessage = "⚠️ MICROPHONE ACCESS FAILED AFTER 3 RETRIES\n\n";
+          errorMessage += "Possible causes:\n";
+          errorMessage += "1. Android app missing RECORD_AUDIO permission in manifest\n";
+          errorMessage += "2. Microphone permission not granted in Android settings\n";
+          errorMessage += "3. Another app is using the microphone\n\n";
+          errorMessage += "SOLUTION:\n";
+          errorMessage += "Ask Android developer to verify AndroidManifest.xml has:\n";
+          errorMessage += "<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n";
+          errorMessage += "Or check: Settings → Apps → [App Name] → Permissions → Microphone";
           setError(errorMessage);
           setDebugInfo(`${err.name}: ${err.message} (Max retries reached)`);
           setIsRetrying(false);
