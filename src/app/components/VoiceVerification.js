@@ -16,13 +16,14 @@ const VoiceVerification = ({
   const [error, setError] = useState("");
   const [recordingTime, setRecordingTime] = useState(0);
   const [debugInfo, setDebugInfo] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
   const streamRef = useRef(null);
+  const retryCountRef = useRef(0); // Use ref to avoid closure issues
 
   // Detect if we're in a WebView
   const isWebView = () => {
@@ -80,11 +81,11 @@ const VoiceVerification = ({
     };
   }, []);
 
-  const startRecording = async () => {
+  const startRecording = async (currentRetry = 0) => {
     try {
       setError("");
       setIsRetrying(false);
-      logToAndroid("Starting recording attempt", { retryCount });
+      logToAndroid("Starting recording attempt", { retryCount: currentRetry });
       
       // Check if mediaDevices is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -187,7 +188,7 @@ const VoiceVerification = ({
         error: err.message,
         name: err.name,
         stack: err.stack,
-        retryCount
+        retryCount: currentRetry
       });
       
       let errorMessage = "Unable to access microphone. ";
@@ -202,27 +203,29 @@ const VoiceVerification = ({
         setDebugInfo(`${err.name}: ${err.message}`);
       } else if (err.name === 'NotReadableError' || err.message.includes('Could not start audio source')) {
         // Retry with increasing delays for audio source conflicts
-        if (retryCount < 3) {
-          const delay = (retryCount + 1) * 1000; // 1s, 2s, 3s
+        const nextRetry = currentRetry + 1;
+        if (nextRetry <= 3) {
+          const delay = nextRetry * 1000; // 1s, 2s, 3s, 4s
           setIsRetrying(true);
-          errorMessage = `Camera/audio conflict detected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount + 1}/3)`;
+          setRetryAttempt(nextRetry);
+          errorMessage = `Camera/audio conflict detected. Retrying in ${delay/1000} seconds... (Attempt ${nextRetry}/3)`;
           setError(errorMessage);
-          setDebugInfo(`Retry ${retryCount + 1}: Waiting ${delay}ms`);
+          setDebugInfo(`Retry ${nextRetry}: Waiting ${delay}ms`);
           
           logToAndroid("Retrying microphone access", { 
             delay, 
-            attempt: retryCount + 1 
+            attempt: nextRetry 
           });
           
           setTimeout(() => {
-            setRetryCount(retryCount + 1);
-            startRecording();
+            startRecording(nextRetry); // Pass the new retry count directly
           }, delay);
         } else {
-          errorMessage = "Unable to access microphone after multiple attempts. The camera may be blocking audio access. Please try closing and reopening the app.";
+          errorMessage = "Unable to access microphone after 3 attempts. The camera may be blocking audio access. Please try closing and reopening the app.";
           setError(errorMessage);
           setDebugInfo(`${err.name}: ${err.message} (Max retries reached)`);
-          setRetryCount(0);
+          setIsRetrying(false);
+          setRetryAttempt(0);
         }
       } else {
         errorMessage += err.message;
@@ -247,8 +250,9 @@ const VoiceVerification = ({
 
   const handleRecordClick = () => {
     if (isRecording) {
-      stopRecording();
-    } else {
+      stopRecoAttempt(0); // Reset retry count on new recording attempt
+      setIsRetrying(false);
+      startRecording(0); // Start with retry count 0
       setRetryCount(0); // Reset retry count on new recording attempt
       startRecording();
     }
