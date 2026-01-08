@@ -45,6 +45,7 @@ const CardDetectionApp = () => {
   const [countdown, setCountdown] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [secureResultId, setSecureResultId] = useState(null);
 
   // Camera permission state
   const [cameraPermissionStatus, setCameraPermissionStatus] = useState("unknown");
@@ -193,23 +194,64 @@ const CardDetectionApp = () => {
 
   // Trigger voice verification popup after successful scan
   useEffect(() => {
+    if (currentPhase === "awaiting-voice-verification") {
+      console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
+      // Voice verification popup is already shown in back scan success handler
+      // Data is secured on server and not accessible to Android until verification completes
+    }
+    
     if (currentPhase === "results" && finalOcrResults) {
-      console.log("✅ Scan completed successfully, showing voice verification after delay");
-      
-      // Show voice verification popup after 2-3 seconds
-      const timer = setTimeout(() => {
-        setShowVoiceVerification(true);
-      }, 2500); // 2.5 seconds delay
-
-      return () => clearTimeout(timer);
+      console.log("✅ Voice verification completed AND results phase - data now accessible to Android");
     }
   }, [currentPhase, finalOcrResults]);
 
+  // Initialize window.scanStatus for Android polling
+  useEffect(() => {
+    // Set initial incomplete status
+    window.scanStatus = {
+      complete_scan: false,
+      status: "idle",
+      message: "Scan not started"
+    };
 
+    // Expose polling function for Android
+    window.getScanStatus = async () => {
+      if (!sessionId) {
+        return {
+          complete_scan: false,
+          status: "no_session"
+        };
+      }
 
- 
+      try {
+        const response = await fetch(
+          `/api/secure-results?sessionId=${sessionId}`
+        );
+        const data = await response.json();
+        
+        // Update window.scanStatus with server response
+        window.scanStatus = {
+          complete_scan: data.complete_scan || false,
+          status: data.status,
+          encrypted_data: data.encrypted_data || null,
+          ...data
+        };
+        
+        return window.scanStatus;
+      } catch (error) {
+        return {
+          complete_scan: false,
+          status: "error",
+          error: error.message
+        };
+      }
+    };
 
-
+    return () => {
+      delete window.getScanStatus;
+      delete window.scanStatus;
+    };
+  }, [sessionId]);
 
   // Handles camera permission errors and provides user feedback
   const handleCameraPermissionError = (errorType) => {
@@ -1176,22 +1218,64 @@ const CardDetectionApp = () => {
             stopRequestedRef.current = true; // Also stop any further detection
             
             console.log(
-              "✅ SUCCESS/ALREADY_COMPLETED STATUS received in page.js - transitioning to 'results'"
+              "✅ SUCCESS/ALREADY_COMPLETED STATUS received - securing data on server"
             );
-            console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}, Complete Scan: ${finalResult.complete_scan}`);
+            console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}`);
             
             // 🔦 Disable flashlight on success
             await disableFlashlight();
             
-            setFinalOcrResults(finalResult);
-            setCurrentPhase("back-complete");
-            setAttemptCount(0);
-            setCurrentOperation("");
-            
-            // Show success message for 1 second before showing results
-            setTimeout(() => {
-              setCurrentPhase("results");
-            }, 100);
+            // 🔒 CRITICAL: Store encrypted data on SERVER (not in React state)
+            try {
+              const response = await fetch('/api/secure-results', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: sessionId,
+                  scanData: finalResult,
+                  merchantId: authData?.merchantId
+                })
+              });
+
+              const data = await response.json();
+
+              if (data.success) {
+                console.log(`🔒 Encrypted data stored securely: ${data.resultId}`);
+                console.log(`   └─ Status: ${data.status}`);
+                console.log(`   └─ Android access: BLOCKED until voice verification`);
+                
+                // Store ONLY the result ID (not the actual encrypted data)
+                setSecureResultId(data.resultId);
+                
+                // Set window status for Android (incomplete until voice verification)
+                window.scanStatus = {
+                  complete_scan: false, // ❌ Android will NOT process
+                  status: "pending_voice_verification",
+                  message: "Awaiting voice verification"
+                };
+                
+                console.log("🚫 Android sees: complete_scan = false");
+                
+                setCurrentPhase("back-complete");
+                setAttemptCount(0);
+                setCurrentOperation("");
+                
+                // ⚠️ DO NOT set finalOcrResults here - data stays on server
+                // ⚠️ DO NOT expose encrypted_data to window object
+                
+                // Show success message briefly before voice verification
+                setTimeout(() => {
+                  setCurrentPhase("awaiting-voice-verification");
+                  setShowVoiceVerification(true);
+                }, 100);
+              } else {
+                throw new Error(data.error || 'Failed to store scan results');
+              }
+            } catch (error) {
+              console.error("❌ Failed to secure scan results:", error);
+              setErrorMessage("Failed to process scan results. Please try again.");
+              setCurrentPhase("error");
+            }
           } else {
             // 🛡️ Double check - if success was already received, don't process failure
             if (backSuccessReceivedRef.current) {
@@ -1386,14 +1470,105 @@ const CardDetectionApp = () => {
     stopRequestedRef.current = false;
   };
 
-  const handleVoiceVerificationSuccess = (result) => {
+  const handleVoiceVerificationSuccess = async (result) => {
     console.log("✅ Voice verification completed successfully:", result);
-    // You can add additional logic here if needed
+    
+    if (!secureResultId) {
+      console.error("❌ No secure result ID found");
+      setErrorMessage("Verification succeeded but scan reference was lost.");
+      return;
+    }
+
+    try {
+      // Step 1: Mark result as voice-verified on server
+      const verifyResponse = await fetch('/api/secure-results', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resultId: secureResultId,
+          verificationId: result.verification_id || result.id || `voice_${Date.now()}`
+        })
+      });
+
+      const verifyData = await verifyResponse.json();
+
+      if (!verifyData.success) {
+        throw new Error(verifyData.error || 'Failed to verify result');
+      }
+
+      console.log("✅ Server confirmed voice verification");
+
+      // Step 2: Retrieve verified data from server
+      const dataResponse = await fetch(
+        `/api/secure-results?resultId=${secureResultId}`
+      );
+      
+      const finalData = await dataResponse.json();
+
+      if (finalData.success && finalData.status === "verified") {
+        console.log("🔓 Encrypted data released after voice verification");
+        
+        // NOW expose to React state
+        setFinalOcrResults(finalData);
+        setCurrentPhase("results");
+
+        // 🔓 CRITICAL: NOW set complete_scan = true for Android
+        window.scanStatus = {
+          complete_scan: true, // ✅ Android can NOW process
+          encrypted_data: finalData.encrypted_data,
+          status: "verified",
+          voice_verified: true,
+          verification_id: result.verification_id || result.id,
+          // Include all scan data fields for Android
+          ...finalData
+        };
+
+        console.log("✅ Android can now access: window.scanStatus");
+        console.log("   └─ complete_scan: true");
+        console.log("   └─ encrypted_data: [PRESENT]");
+        console.log("   └─ voice_verified: true");
+
+        // Cleanup
+        setSecureResultId(null);
+        setShowVoiceVerification(false);
+        
+      } else if (finalData.status === "pending_voice_verification") {
+        throw new Error("Verification not recorded on server");
+      } else {
+        throw new Error(finalData.error || 'Failed to retrieve scan data');
+      }
+      
+    } catch (error) {
+      console.error("❌ Error after voice verification:", error);
+      setErrorMessage(`Verification failed: ${error.message}`);
+      setCurrentPhase("error");
+    }
   };
 
   const handleVoiceVerificationClose = () => {
-    console.log("Voice verification popup closed");
+    console.log("⚠️ Voice verification popup closed without completion");
+    
+    if (secureResultId) {
+      console.log(`🗑️ Discarding unverified result: ${secureResultId}`);
+      
+      // Delete from server
+      fetch(`/api/secure-results?resultId=${secureResultId}`, {
+        method: 'DELETE'
+      }).catch(err => console.error("Failed to delete result:", err));
+      
+      setSecureResultId(null);
+    }
+    
+    // Reset Android status
+    window.scanStatus = {
+      complete_scan: false,
+      status: "cancelled",
+      message: "Voice verification cancelled"
+    };
+    
     setShowVoiceVerification(false);
+    setErrorMessage("Voice verification cancelled. Please scan your card again.");
+    setCurrentPhase("idle");
   };
 
   const handleFakeCardRetry = () => {
