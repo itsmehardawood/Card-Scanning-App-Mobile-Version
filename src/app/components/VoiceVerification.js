@@ -55,7 +55,7 @@ const VoiceVerification = ({
   // Log environment info on mount
   useEffect(() => {
     if (isOpen) {
-      logToAndroid("Voice Verification opened", {
+      const diagnosticInfo = {
         mode: mode,
         isWebView: isWebView(),
         userAgent: navigator.userAgent,
@@ -63,8 +63,29 @@ const VoiceVerification = ({
         getUserMedia: !!navigator.mediaDevices?.getUserMedia,
         phoneNumber: phoneNumber ? "present" : "missing",
         merchantId: merchantId || "missing"
-      });
+      };
+      
+      logToAndroid("Voice Verification opened", diagnosticInfo);
       setDebugInfo(`WebView: ${isWebView()} | Mode: ${mode}`);
+      
+      // Run microphone test WITHOUT stopping camera to diagnose issue
+      logToAndroid("🧪 DIAGNOSTIC: Testing microphone access WITHOUT camera stop");
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          logToAndroid("✅ DIAGNOSTIC: Microphone accessible!", {
+            tracks: stream.getAudioTracks().length,
+            trackLabel: stream.getAudioTracks()[0]?.label
+          });
+          // Stop immediately - this is just a test
+          stream.getTracks().forEach(t => t.stop());
+        })
+        .catch(err => {
+          logToAndroid("❌ DIAGNOSTIC: Microphone NOT accessible even without camera", {
+            error: err.name,
+            message: err.message,
+            diagnosis: "WebView microphone access is blocked - check WebChromeClient.onPermissionRequest"
+          });
+        });
     }
   }, [isOpen, mode]);
 
@@ -274,15 +295,22 @@ const VoiceVerification = ({
             startRecording(nextRetry); // Pass the new retry count directly
           }, delay);
         } else {
-          errorMessage = "⚠️ MICROPHONE ACCESS FAILED AFTER 3 RETRIES\n\n";
-          errorMessage += "Possible causes:\n";
-          errorMessage += "1. Android app missing RECORD_AUDIO permission in manifest\n";
-          errorMessage += "2. Microphone permission not granted in Android settings\n";
-          errorMessage += "3. Another app is using the microphone\n\n";
-          errorMessage += "SOLUTION:\n";
-          errorMessage += "Ask Android developer to verify AndroidManifest.xml has:\n";
-          errorMessage += "<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n";
-          errorMessage += "Or check: Settings → Apps → [App Name] → Permissions → Microphone";
+          errorMessage = "⚠️ MICROPHONE ACCESS BLOCKED\n\n";
+          errorMessage += "Root Cause: WebView cannot access microphone\n\n";
+          errorMessage += "✅ SOLUTION FOR ANDROID DEVELOPER:\n\n";
+          errorMessage += "1. Verify AndroidManifest.xml has:\n";
+          errorMessage += "   <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n";
+          errorMessage += "2. CRITICAL: Add WebChromeClient with onPermissionRequest:\n\n";
+          errorMessage += "   webView.setWebChromeClient(new WebChromeClient() {\n";
+          errorMessage += "       @Override\n";
+          errorMessage += "       public void onPermissionRequest(PermissionRequest request) {\n";
+          errorMessage += "           request.grant(request.getResources());\n";
+          errorMessage += "       }\n";
+          errorMessage += "   });\n\n";
+          errorMessage += "3. Request runtime permission:\n";
+          errorMessage += "   ActivityCompat.requestPermissions(activity,\n";
+          errorMessage += "       new String[]{Manifest.permission.RECORD_AUDIO}, 1);\n\n";
+          errorMessage += "Without WebChromeClient.onPermissionRequest, getUserMedia will always fail!";
           setError(errorMessage);
           setDebugInfo(`${err.name}: ${err.message} (Max retries reached)`);
           setIsRetrying(false);
