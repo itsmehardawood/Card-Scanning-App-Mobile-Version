@@ -224,7 +224,7 @@ const CardDetectionApp = () => {
 
       try {
         const response = await fetch(
-          `/api/secure-results?sessionId=${sessionId}`
+          `/securityscan/api/secure-results?sessionId=${sessionId}`
         );
         const data = await response.json();
         
@@ -639,7 +639,8 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc3NzY1OTEsImV4cCI6MTc2Nzc4MDE5MSwibmJmIjoxNzY3Nzc2NTkxLCJqdGkiOiJRUk9DcWlDU09tbGpaNDdqIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.AKWoulc5zVFptCTK9JzB8yyaY9Mb7spS5lUij3rWcYA",
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc4NTk2NDEsImV4cCI6MTc2Nzg2MzI0MSwibmJmIjoxNzY3ODU5NjQxLCJqdGkiOiJuZEhDeDdTd01wdmZKcUNMIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.WMViEZKhUkvnyySa4SKeWM6kg8Edx5XAJ9Y3Dc7fdPM",
+          
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -1197,7 +1198,7 @@ const CardDetectionApp = () => {
             
             // 🔒 CRITICAL: Store encrypted data on SERVER (not in React state)
             try {
-              const response = await fetch('/api/secure-results', {
+              const response = await fetch('/securityscan/api/secure-results', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1493,7 +1494,7 @@ const CardDetectionApp = () => {
 
     try {
       // Step 1: Mark result as voice-verified on server
-      const verifyResponse = await fetch('/api/secure-results', {
+      const verifyResponse = await fetch('/securityscan/api/secure-results', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1512,7 +1513,7 @@ const CardDetectionApp = () => {
 
       // Step 2: Retrieve verified data from server
       const dataResponse = await fetch(
-        `/api/secure-results?resultId=${secureResultId}`
+        `/securityscan/api/secure-results?resultId=${secureResultId}`
       );
       
       const finalData = await dataResponse.json();
@@ -1564,7 +1565,7 @@ const CardDetectionApp = () => {
       console.log(`🗑️ Discarding unverified result: ${secureResultId}`);
       
       // Delete from server
-      fetch(`/api/secure-results?resultId=${secureResultId}`, {
+      fetch(`/securityscan/api/secure-results?resultId=${secureResultId}`, {
         method: 'DELETE'
       }).catch(err => console.error("Failed to delete result:", err));
       
