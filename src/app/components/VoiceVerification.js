@@ -62,6 +62,7 @@ const VoiceVerification = ({
         mediaDevices: !!navigator.mediaDevices,
         getUserMedia: !!navigator.mediaDevices?.getUserMedia,
         phoneNumber: phoneNumber ? "present" : "missing",
+
         merchantId: merchantId || "missing"
       };
       
