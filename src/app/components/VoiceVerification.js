@@ -262,7 +262,7 @@ const VoiceVerification = ({
         errorMessage = "⚠️ MICROPHONE PERMISSION DENIED\n\n";
         errorMessage += "The Android app does not have microphone permission.\n\n";
         errorMessage += "SOLUTION:\n";
-        errorMessage += "1. Ask the Android developer to add this to AndroidManifest.xml:\n";
+        errorMessage += "1. Add this to AndroidManifest.xml:\n";
         errorMessage += "   <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n";
         errorMessage += "2. Or go to Android Settings → Apps → [App Name] → Permissions → Enable Microphone";
         setError(errorMessage);
@@ -363,7 +363,7 @@ const VoiceVerification = ({
 
       const apiEndpoint = mode === "verify" 
         ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
-        : "https://testscan.cardnest.io/voice/register";
+        : `${process.env.NEXT_PUBLIC_API_URL}/voice/register`;
 
       logToAndroid(`Submitting voice ${mode}`, {
         endpoint: apiEndpoint,
