@@ -95,8 +95,36 @@ const VoiceVerification = ({
             diagnosis: "WebView microphone access is blocked - check WebChromeClient.onPermissionRequest"
           });
           
-          // Show error in UI for immediate visibility
-          setError(`🔍 DIAGNOSTIC: Microphone blocked by WebView\n\nError: ${err.name}\nMessage: ${err.message}\n\nThe Android app needs proper permission handling.`);
+          // Show comprehensive error message based on error type
+          let diagnosticMessage = "⚠️ MICROPHONE ACCESS BLOCKED\n\n";
+          diagnosticMessage += `Error: ${err.name} - "${err.message}"\n\n`;
+          
+          if (err.name === 'NotReadableError' && err.message.includes('Could not start audio source')) {
+            diagnosticMessage += "ROOT CAUSE: WebView cannot access microphone\n\n";
+            diagnosticMessage += "✅ ANDROID DEVELOPER - ADD THIS CODE:\n\n";
+            diagnosticMessage += "1. In your WebView setup, add:\n\n";
+            diagnosticMessage += "webView.setWebChromeClient(new WebChromeClient() {\n";
+            diagnosticMessage += "    @Override\n";
+            diagnosticMessage += "    public void onPermissionRequest(\n";
+            diagnosticMessage += "        final PermissionRequest request) {\n";
+            diagnosticMessage += "        request.grant(request.getResources());\n";
+            diagnosticMessage += "    }\n";
+            diagnosticMessage += "});\n\n";
+            diagnosticMessage += "2. Verify AndroidManifest.xml has:\n";
+            diagnosticMessage += "<uses-permission android:name=\n";
+            diagnosticMessage += '  "android.permission.RECORD_AUDIO" />\n\n';
+            diagnosticMessage += "3. Request runtime permission:\n";
+            diagnosticMessage += "ActivityCompat.requestPermissions(activity,\n";
+            diagnosticMessage += "    new String[]{Manifest.permission.RECORD_AUDIO},\n";
+            diagnosticMessage += "    REQUEST_CODE);";
+          } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            diagnosticMessage += "Permission denied. Enable microphone in:\n";
+            diagnosticMessage += "Settings → Apps → [App Name] → Permissions";
+          } else {
+            diagnosticMessage += "The Android app needs WebChromeClient configuration.";
+          }
+          
+          setError(diagnosticMessage);
           setDebugInfo(`DIAGNOSTIC: ${err.name} - ${err.message}`);
         });
     }
