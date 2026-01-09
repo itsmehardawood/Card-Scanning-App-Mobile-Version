@@ -101,6 +101,7 @@ export async function POST(request) {
         let phoneNumber = null;
         if (deviceData.sims && deviceData.sims.length > 0) {
           phoneNumber = deviceData.sims[0].sim;
+
           console.log("📞 Phone Number Extracted:", phoneNumber);
         }
 

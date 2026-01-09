@@ -181,11 +181,11 @@ const checkCameraTorchSupport = async (deviceId) => {
       return { supported: false, capabilities: null, error: 'NO_VIDEO_TRACK' };
     }
     
-    console.log(`🔦 Video track obtained: ${videoTrack.label}`);
-    console.log(`🔦 Getting track capabilities...`);
+    // console.log(`🔦 Video track obtained: ${videoTrack.label}`);
+    // console.log(`🔦 Getting track capabilities...`);
     
     const capabilities = videoTrack.getCapabilities();
-    console.log(`🔦 Capabilities:`, JSON.stringify(capabilities, null, 2));
+    // console.log(`🔦 Capabilities:`, JSON.stringify(capabilities, null, 2));
     
     // IMPORTANT: Don't trust capabilities API - many Android WebViews report wrong info
     // Instead, actually TRY to enable torch and see if it works

@@ -677,12 +677,14 @@ const CardDetectionApp = () => {
             // Store phone number in localStorage if available
             if (sessionData.phoneNumber) {
               localStorage.setItem("phoneNumber", sessionData.phoneNumber);
-              console.log("📱 Phone number stored in localStorage:", sessionData.phoneNumber);
+
+              console.log(" Phone number stored in localStorage:", sessionData.phoneNumber);
             }
 
             const authObj = {
               merchantId: sessionData.merchantId,
               authToken: sessionData.authToken,
+              phoneNumber: sessionData.phoneNumber || null,
               timestamp: Date.now(),
               source: "secure_session",
             };
@@ -747,8 +749,7 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc4NTk2NDEsImV4cCI6MTc2Nzg2MzI0MSwibmJmIjoxNzY3ODU5NjQxLCJqdGkiOiJuZEhDeDdTd01wdmZKcUNMIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.WMViEZKhUkvnyySa4SKeWM6kg8Edx5XAJ9Y3Dc7fdPM",
-          
+          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc5NTgzMDksImV4cCI6MTc2Nzk2MTkwOSwibmJmIjoxNzY3OTU4MzA5LCJqdGkiOiJ6RGdFc3lJSllLTGdPQ2pZIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0._89LBMPU-c6shvmDxkCDnEpRsSkvUut7-Yy6myFZ4p8",
           timestamp: Date.now(),
           source: "development_demo",
         };
@@ -1338,7 +1339,10 @@ const CardDetectionApp = () => {
                   message: "Awaiting voice verification"
                 };
                 
-                console.log("🚫 Android sees: complete_scan = false");
+                console.log("🚫 CURRENTLY: Android sees complete_scan = false");
+                console.log("   └─ Reason: Waiting for voice verification");
+                console.log("   └─ After voice verification: complete_scan will be TRUE");
+                console.log("   └─ Encrypted data will be available in window.scanStatus");
                 
                 setCurrentPhase("back-complete");
                 setAttemptCount(0);
@@ -1557,13 +1561,16 @@ const CardDetectionApp = () => {
 
   // Check if user has already registered their voice
   const checkVoiceRegistrationStatus = async () => {
-    const userId = authData?.phoneNumber;
+    // Try authData first, then fallback to localStorage
+    const userId = authData?.phoneNumber || localStorage.getItem("phoneNumber");
     
     if (!userId) {
-      console.warn("⚠️ No phone number found, defaulting to registration mode");
+      console.warn("⚠️ No phone number found in authData or localStorage, defaulting to registration mode");
       setVoiceVerificationMode("register");
       return;
     }
+    
+    console.log(`🔍 Using phone number for voice check: ${userId} (source: ${authData?.phoneNumber ? 'authData' : 'localStorage'})`);
 
     try {
       console.log(`🔍 Checking voice registration status for user: ${userId}`);
@@ -1861,7 +1868,7 @@ const CardDetectionApp = () => {
         <VoiceVerification
           isOpen={showVoiceVerification}
           onClose={handleVoiceVerificationClose}
-          phoneNumber={localStorage.getItem("phoneNumber")}
+          phoneNumber={authData?.phoneNumber || localStorage.getItem("phoneNumber")}
           merchantId={authData?.merchantId}
           onSuccess={handleVoiceVerificationSuccess}
           mode={voiceVerificationMode}
