@@ -1576,7 +1576,7 @@ const CardDetectionApp = () => {
       console.log(`🔍 Checking voice registration status for user: ${userId}`);
       
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/voice/register/${userId}`
+        `https://admin.cardnest.io/api/voice/register/${userId}`
       );
       
       if (response.ok) {
