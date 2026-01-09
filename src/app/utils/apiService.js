@@ -20,11 +20,10 @@ export const sendFrameToAPI = async (
   // testing ngrok
   // const apiUrl = `https://477a9ab44259.ngrok-free.app/detect/${merchantId}`;
 
-  // dev server
-  const apiUrl = `https://testscan.cardnest.io/detect/${merchantId}`;
+  // backend server
+  const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/detect/${merchantId}`;
 
-  // prod server
-  // const apiUrl = `https://api.cardnest.io/detect/${merchantId}`;
+
 
   const file = new File([frameBlob], `${phase}_frame_${frameNumber}.jpg`, {
     type: "image/jpeg",
@@ -91,7 +90,7 @@ export const reportFailure = async (
       return;
     }
 
-    const apiUrl = `https://testscan.cardnest.io/report_failure`;
+    const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/report_failure`;
 
     const payload = {
       scan_id: scanId || "",
