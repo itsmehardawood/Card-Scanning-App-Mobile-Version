@@ -510,7 +510,7 @@ const VoiceVerification = ({
         {/* Record Button */}
         <button
           onClick={handleRecordClick}
-          disabled={isSubmitting || isRetrying}
+          disabled={isSubmitting || isRetrying }
           className={`w-full py-4 rounded-lg font-semibold text-white transition-all mb-3 ${
             isRecording
               ? "bg-red-600 hover:bg-red-700 animate-pulse"
@@ -526,20 +526,14 @@ const VoiceVerification = ({
             </>
           ) : (
             <>
-              🎤 {hasRecorded ? "Record Again" : "Start Recording"}
+               {hasRecorded ? "Record Again" : "Start Recording"}
             </>
           )}
         </button>
 
         {/* Action Buttons */}
         <div className="flex gap-3">
-          <button
-            onClick={handleSkip}
-            disabled={isSubmitting}
-            className="flex-1 py-3 rounded-lg font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors disabled:opacity-50"
-          >
-            Skip for Now
-          </button>
+        
           <button
             onClick={handleSubmit}
             disabled={!audioBlob || isSubmitting || isRecording}
