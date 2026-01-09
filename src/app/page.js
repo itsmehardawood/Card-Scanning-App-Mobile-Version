@@ -399,7 +399,7 @@ const CardDetectionApp = () => {
   const stopCameraForVoice = async () => {
     return new Promise((resolve) => {
       try {
-        console.log("📹 === STOPPING CAMERA FOR VOICE VERIFICATION ===");
+        console.log(" === STOPPING CAMERA FOR VOICE VERIFICATION ===");
         
         // 1. Stop detection loops FIRST
         console.log("   └─ Stopping detection loops...");
@@ -1569,7 +1569,7 @@ const CardDetectionApp = () => {
       console.log(`🔍 Checking voice registration status for user: ${userId}`);
       
       const response = await fetch(
-        `https://admin.cardnest.io/api/voice/register/${userId}`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/voice/register/${userId}`
       );
       
       if (response.ok) {

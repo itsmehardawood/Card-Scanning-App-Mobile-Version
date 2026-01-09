@@ -80,11 +80,24 @@ const VoiceVerification = ({
           stream.getTracks().forEach(t => t.stop());
         })
         .catch(err => {
-          logToAndroid("❌ DIAGNOSTIC: Microphone NOT accessible even without camera", {
-            error: err.name,
-            message: err.message,
+          // Log detailed error to console with all properties
+          console.error("❌ MICROPHONE DIAGNOSTIC FAILED:");
+          console.error("  Error Name:", err.name);
+          console.error("  Error Message:", err.message);
+          console.error("  Error Stack:", err.stack);
+          console.error("  Error Object:", err);
+          
+          logToAndroid(`❌ DIAGNOSTIC FAILED: ${err.name} - ${err.message}`, {
+            errorName: err.name,
+            errorMessage: err.message,
+            errorStack: err.stack,
+            constraint: err.constraint || "none",
             diagnosis: "WebView microphone access is blocked - check WebChromeClient.onPermissionRequest"
           });
+          
+          // Show error in UI for immediate visibility
+          setError(`🔍 DIAGNOSTIC: Microphone blocked by WebView\n\nError: ${err.name}\nMessage: ${err.message}\n\nThe Android app needs proper permission handling.`);
+          setDebugInfo(`DIAGNOSTIC: ${err.name} - ${err.message}`);
         });
     }
   }, [isOpen, mode]);
@@ -376,8 +389,8 @@ const VoiceVerification = ({
       formData.append("file", audioBlob, fileName);
 
       const apiEndpoint = mode === "verify" 
-        ? "https://testscan.cardnest.io/voice/verify"
-        : "https://testscan.cardnest.io/voice/register";
+        ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
+        : `${process.env.NEXT_PUBLIC_API_URL}/voice/register`;
 
       logToAndroid(`Submitting voice ${mode}`, {
         endpoint: apiEndpoint,
