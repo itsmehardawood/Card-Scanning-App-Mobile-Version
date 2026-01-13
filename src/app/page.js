@@ -197,10 +197,59 @@ const CardDetectionApp = () => {
   useEffect(() => {
     if (currentPhase === "awaiting-voice-verification") {
       console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
-      // Show voice verification popup
-      // NOTE: Not stopping camera - allowing both camera and mic to run simultaneously
-      // If Android WebView has issues, the VoiceVerification component will handle retries
-      setShowVoiceVerification(true);
+      
+      // 🔒 CRITICAL: FORCE STOP CAMERA BEFORE VOICE VERIFICATION
+      // This is 200% necessary for Android to release camera resources
+      const stopCameraAndShowVoice = async () => {
+        console.log("🎥 [VOICE PREP] Forcing camera stop before voice verification...");
+        
+        // Stop detection loops immediately
+        stopRequestedRef.current = true;
+        setDetectionActive(false);
+        
+        // Get camera stream and stop ALL tracks
+        const stream = videoRef.current?.srcObject;
+        if (stream) {
+          const tracks = stream.getTracks();
+          console.log(`   └─ Found ${tracks.length} camera track(s) - stopping all...`);
+          
+          tracks.forEach((track, index) => {
+            console.log(`      └─ [${index + 1}/${tracks.length}] ${track.kind} - ${track.label} - State: ${track.readyState}`);
+            track.stop();
+            track.enabled = false; // Force disable for Android
+            console.log(`      └─ ✅ Stopped - New state: ${track.readyState}`);
+          });
+          
+          console.log("   └─ ✅ All camera tracks stopped");
+        } else {
+          console.log("   └─ No active camera stream found");
+        }
+        
+        // Clear video element completely
+        if (videoRef.current) {
+          console.log("   └─ Clearing video element...");
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+          videoRef.current.src = "";
+          videoRef.current.load();
+          videoRef.current.onloadedmetadata = null;
+          videoRef.current.oncanplay = null;
+          console.log("   └─ ✅ Video element cleared");
+        }
+        
+        // Hide camera UI
+        setCameraHidden(true);
+        setIsCameraPaused(true);
+        
+        // Wait for Android to release resources (critical for Android WebView)
+        console.log("   └─ ⏳ Waiting 800ms for Android to release camera hardware...");
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        console.log("✅ [VOICE PREP] Camera fully released - NOW showing voice verification");
+        setShowVoiceVerification(true);
+      };
+      
+      stopCameraAndShowVoice();
     }
     
     if (currentPhase === "results" && finalOcrResults) {
