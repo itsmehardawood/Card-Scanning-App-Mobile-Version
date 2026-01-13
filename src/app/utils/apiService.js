@@ -33,30 +33,40 @@ export const sendFrameToAPI = async (
   formData.append("file", file);
   formData.append("phase", phase);
   formData.append("session_id", sessionId);
-  // :white_check_mark: Send request
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    body: formData,
-    headers: {
-      "auth-token": encodeURIComponent(authToken), // :white_check_mark: URL encode the auth token to handle special characters
-      "ngrok-skip-browser-warning": "true", // optional, safe to include
-      // :warning: DO NOT include "Content-Type" here
-    },
+  
+  // 🔒 CRITICAL: Use XMLHttpRequest instead of fetch to bypass mobile interceptor
+  // Mobile apps intercept window.fetch, but NOT XMLHttpRequest
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl);
+    xhr.setRequestHeader("auth-token", encodeURIComponent(authToken));
+    xhr.setRequestHeader("ngrok-skip-browser-warning", "true");
+    
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          console.log("Response of API: ", data);
+          resolve(data);
+        } catch (error) {
+          console.error(":x: Failed to parse API response:", error);
+          reject(new Error("Failed to parse API response"));
+        }
+      } else {
+        const errorText = xhr.responseText;
+        if (!errorText.includes("wait_for_front") && !errorText.includes("wait_for_back")) {
+          console.error(":x: API Error:", errorText);
+        }
+        reject(new Error(`API request failed with status ${xhr.status}`));
+      }
+    };
+    
+    xhr.onerror = function() {
+      reject(new Error("Network error occurred"));
+    };
+    
+    xhr.send(formData);
   });
-  // :white_check_mark: Error handling
-  if (!response.ok) {
-    const errorText = await response.text();
-    // Only log errors that aren't "wait_for_front" or "wait_for_back" (these are expected when scan is complete)
-    if (!errorText.includes("wait_for_front") && !errorText.includes("wait_for_back")) {
-      console.error(":x: API Error:", errorText);
-    }
-    throw new Error(`API request failed with status ${response.status}`);
-  }
-  // :white_check_mark: Parse and return response JSON
-  const data = await response.json();
-  console.log("Response of API: ", data);
-
-  return data;
 };
 
 /**
