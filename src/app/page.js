@@ -399,42 +399,76 @@ const CardDetectionApp = () => {
   const stopCameraForVoice = async () => {
     return new Promise((resolve) => {
       try {
-        console.log(" === STOPPING CAMERA FOR VOICE VERIFICATION ===");
+        console.log("🎥 === STOPPING CAMERA FOR VOICE VERIFICATION (Android Strict Mode) ===");
         
         // 1. Stop detection loops FIRST
-        console.log("   └─ Stopping detection loops...");
+        console.log("   └─ [1/6] Stopping detection loops...");
         stopRequestedRef.current = true;
         setDetectionActive(false);
         
-        // 2. Stop all camera tracks
+        // 2. Stop all camera tracks with Android-specific cleanup
         const stream = videoRef.current?.srcObject;
         if (stream) {
           const tracks = stream.getTracks();
-          console.log(`   └─ Found ${tracks.length} track(s) to stop`);
+          console.log(`   └─ [2/6] Found ${tracks.length} track(s) to stop`);
           
           tracks.forEach(track => {
-            console.log(`      └─ Stopping: ${track.kind} - ${track.label}`);
+            console.log(`      └─ Stopping: ${track.kind} - ${track.label} - State: ${track.readyState}`);
             track.stop();
+            // 🔒 ANDROID FIX: Force immediate track cleanup
+            track.enabled = false;
+            console.log(`      └─ Track stopped - New state: ${track.readyState}`);
           });
         } else {
-          console.log("   └─ No camera stream to stop");
+          console.log("   └─ [2/6] No camera stream to stop");
         }
         
-        // 3. Clear video element completely
+        // 3. Clear video element completely with Android-specific steps
         if (videoRef.current) {
+          console.log("   └─ [3/6] Clearing video element...");
+          
+          // Pause video first
+          videoRef.current.pause();
+          
+          // Clear all sources
           videoRef.current.srcObject = null;
           videoRef.current.src = "";
+          
+          // Force unload on Android
           videoRef.current.load();
-          console.log("   └─ Video element cleared");
+          
+          // Extra step for Android: remove all event listeners
+          videoRef.current.onloadedmetadata = null;
+          videoRef.current.oncanplay = null;
+          
+          console.log("   └─ Video element fully cleared");
         }
         
-        // 4. Hide camera UI
+        // 4. Force garbage collection hint (Android WebView specific)
+        console.log("   └─ [4/6] Forcing resource cleanup...");
+        if (stream) {
+          // Explicitly null out the stream reference
+          stream.getTracks().forEach(track => {
+            // Double-check track is stopped
+            if (track.readyState !== 'ended') {
+              console.warn(`      └─ ⚠️ Track still not ended: ${track.label}, forcing stop again`);
+              track.stop();
+            }
+          });
+        }
+        
+        // 5. Hide camera UI
+        console.log("   └─ [5/6] Hiding camera UI...");
         setCameraHidden(true);
         setIsCameraPaused(true);
-        console.log("   └─ Camera UI hidden");
         
-        console.log("✅ Camera fully stopped and hidden");
-        resolve();
+        // 6. Android-specific: Wait for resources to fully release
+        console.log("   └─ [6/6] Waiting for Android to release camera resources...");
+        setTimeout(() => {
+          console.log("✅ Camera fully stopped, resources released, Android can now access microphone");
+          resolve();
+        }, 500); // Give Android WebView time to release camera resources
+        
       } catch (error) {
         console.error("❌ Error stopping camera:", error);
         resolve(); // Resolve anyway to continue
