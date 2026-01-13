@@ -191,36 +191,16 @@ export const captureAndSendFramesFront = async (
     let captureIntervalRef = null;
     
     const cleanup = () => {
-    console.log("🧹 [FRONT CLEANUP] Starting cleanup...");
-    
-    if (captureIntervalRef) {
-      clearInterval(captureIntervalRef);
-      captureIntervalRef = null;
-    }
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-    
-    // 🔒 CRITICAL: Stop camera tracks to release Android hardware
-    if (videoRef?.current?.srcObject) {
-      const stream = videoRef.current.srcObject;
-      const tracks = stream.getTracks();
-      console.log(`🧹 [FRONT CLEANUP] Stopping ${tracks.length} camera track(s)...`);
-      
-      tracks.forEach(track => {
-        console.log(`   └─ Stopping: ${track.kind} - ${track.label}`);
-        track.stop();
-        track.enabled = false; // Force disable for Android
-      });
-      
-      videoRef.current.srcObject = null;
-      console.log("🧹 [FRONT CLEANUP] Camera tracks stopped and stream cleared");
-    }
-    
-    setIsProcessing(false);
-    console.log("✅ [FRONT CLEANUP] Cleanup complete");
-  };
+      if (captureIntervalRef) {
+        clearInterval(captureIntervalRef);
+        captureIntervalRef = null;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      setIsProcessing(false);
+    };
     
     const countBackSideFeatures = (apiResponse) => {
       const features = {
