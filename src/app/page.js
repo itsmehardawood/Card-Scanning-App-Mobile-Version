@@ -195,15 +195,26 @@ const CardDetectionApp = () => {
 
   // Trigger voice verification popup after successful scan
   useEffect(() => {
-    console.log(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
+    const logPhase = async (msg, data = {}) => {
+      console.log(msg, data);
+      try {
+        await fetch('/securityscan/api/client-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ component: "PageJS-Phase", message: msg, ...data })
+        });
+      } catch (e) { /* ignore */ }
+    };
+    
+    logPhase(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
     
     if (currentPhase === "awaiting-voice-verification") {
-      console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
+      logPhase("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
       
       // 🔒 CRITICAL: FORCE STOP CAMERA BEFORE VOICE VERIFICATION
       // This is 200% necessary for Android to release camera resources
       const stopCameraAndShowVoice = async () => {
-        console.log("🎥 [VOICE PREP] Forcing camera stop before voice verification...");
+        await logPhase("🎥 [VOICE PREP] Forcing camera stop before voice verification...");
         
         // Stop detection loops immediately
         stopRequestedRef.current = true;
@@ -213,7 +224,7 @@ const CardDetectionApp = () => {
         const stream = videoRef.current?.srcObject;
         if (stream) {
           const tracks = stream.getTracks();
-          console.log(`   └─ Found ${tracks.length} camera track(s) - stopping all...`);
+          await logPhase(`   └─ Found ${tracks.length} camera track(s) - stopping all...`);
           
           tracks.forEach((track, index) => {
             console.log(`      └─ [${index + 1}/${tracks.length}] ${track.kind} - ${track.label} - State: ${track.readyState}`);
@@ -222,21 +233,21 @@ const CardDetectionApp = () => {
             console.log(`      └─ ✅ Stopped - New state: ${track.readyState}`);
           });
           
-          console.log("   └─ ✅ All camera tracks stopped");
+          await logPhase("   └─ ✅ All camera tracks stopped");
         } else {
-          console.log("   └─ ⚠️ No active camera stream found (might already be stopped)");
+          await logPhase("   └─ ⚠️ No active camera stream found (might already be stopped)");
         }
         
         // Clear video element completely
         if (videoRef.current) {
-          console.log("   └─ Clearing video element...");
+          await logPhase("   └─ Clearing video element...");
           videoRef.current.pause();
           videoRef.current.srcObject = null;
           videoRef.current.src = "";
           videoRef.current.load();
           videoRef.current.onloadedmetadata = null;
           videoRef.current.oncanplay = null;
-          console.log("   └─ ✅ Video element cleared");
+          await logPhase("   └─ ✅ Video element cleared");
         }
         
         // Hide camera UI
@@ -244,10 +255,10 @@ const CardDetectionApp = () => {
         setIsCameraPaused(true);
         
         // Wait for Android to release resources (critical for Android WebView)
-        console.log("   └─ ⏳ Waiting 800ms for Android to release camera hardware...");
+        await logPhase("   └─ ⏳ Waiting 800ms for Android to release camera hardware...");
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        console.log("✅ [VOICE PREP] Camera fully released - NOW showing voice verification");
+        await logPhase("✅ [VOICE PREP] Camera fully released - NOW showing voice verification");
         setShowVoiceVerification(true);
       };
       
@@ -255,7 +266,7 @@ const CardDetectionApp = () => {
     }
     
     if (currentPhase === "results" && finalOcrResults) {
-      console.log("✅ Voice verification completed AND results phase - data now accessible to Android");
+      logPhase("✅ Voice verification completed AND results phase - data now accessible to Android");
     }
   }, [currentPhase, finalOcrResults]);
 
