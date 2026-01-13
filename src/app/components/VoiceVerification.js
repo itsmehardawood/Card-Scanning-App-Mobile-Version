@@ -367,8 +367,18 @@ const VoiceVerification = ({
       formData.append("user_id", userId);
       formData.append("merchant_id", merchantId);
 
-      // Strip codec params (e.g. "audio/webm;codecs=opus") to clean MIME type
-      const explicitType = (audioBlob.type || "audio/webm").split(';')[0].trim();
+      // Log original blob type
+      logToAndroid("Audio blob original type", { 
+        original_type: audioBlob.type,
+        size: audioBlob.size
+      });
+
+      // Strip codec params (e.g. "audio/webm;codecs=opus" → "audio/webm")
+      const cleanMimeType = (audioBlob.type || "audio/webm").split(';')[0].trim();
+      logToAndroid("Audio blob after stripping codecs", { 
+        clean_type: cleanMimeType
+      });
+
       const extMap = {
         "audio/mp4": "m4a",
         "audio/wav": "wav",
@@ -376,16 +386,19 @@ const VoiceVerification = ({
         "audio/webm": "webm",
         "audio/mpeg": "mp3"
       };
-      const fileExt = extMap[explicitType] || "webm";
+      const fileExt = extMap[cleanMimeType] || "webm";
       const fileName = `voice_recording.${fileExt}`;
 
-      // Append original blob (do NOT double-wrap) so browser sends correct binary
+      // Append original blob directly (do NOT wrap it again)
       formData.append("file", audioBlob, fileName);
-      logToAndroid("Prepared FormData for submit", {
+
+      logToAndroid("FormData prepared - exactly like curl", {
+        user_id: userId,
+        merchant_id: merchantId,
         file_name: fileName,
-        file_type: explicitType,
+        file_type: cleanMimeType,
         file_size: audioBlob.size,
-        user_id: userId
+        note: "Sending as multipart/form-data (same as curl)"
       });
 
       const apiEndpoint = mode === "verify" 
@@ -394,23 +407,19 @@ const VoiceVerification = ({
 
       logToAndroid(`Submitting voice ${mode}`, {
         endpoint: apiEndpoint,
-        user_id: userId,
-        merchant_id: merchantId,
-        file_size: audioBlob.size,
-        file_type: audioBlob.type,
-        file_name: fileName,
-        explicit_type: explicitType,
-        blob_size_check: audioBlob.size > 0 ? '✅ Has data' : '❌ EMPTY BLOB'
+        method: "POST",
+        body_type: "FormData with 3 fields (user_id, merchant_id, file)"
       });
 
       // Send to API
       const response = await fetch(apiEndpoint, {
         method: "POST",
         body: formData,
+        // DO NOT set Content-Type header - let browser set it with boundary
       });
 
       const responseText = await response.text();
-      logToAndroid("API Response", { 
+      logToAndroid("API Response received", { 
         status: response.status, 
         response: responseText 
       });
@@ -423,7 +432,7 @@ const VoiceVerification = ({
           result = { message: responseText };
         }
         
-        logToAndroid(`Voice ${mode} successful`, result);
+        logToAndroid(`✅ Voice ${mode} successful`, result);
         
         // Call success callback
         if (onSuccess) {
@@ -433,7 +442,7 @@ const VoiceVerification = ({
         // Close popup
         onClose();
       } else {
-        logToAndroid(`Voice ${mode} failed`, { 
+        logToAndroid(`❌ Voice ${mode} failed`, { 
           status: response.status,
           error: responseText 
         });
@@ -442,7 +451,7 @@ const VoiceVerification = ({
         setError(`Voice ${mode} failed (${response.status}): ${serverMsg}`);
       }
     } catch (err) {
-      logToAndroid(`Error submitting voice ${mode}`, { 
+      logToAndroid(`❌ Error submitting voice ${mode}`, { 
         error: err.message,
         stack: err.stack 
       });
