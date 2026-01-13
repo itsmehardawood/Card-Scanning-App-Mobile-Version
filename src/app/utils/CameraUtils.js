@@ -1270,19 +1270,35 @@ export const enableTorch = async (videoRef) => {
       return { success: false, reason: 'NOT_SUPPORTED', cameraLabel: videoTrack.label };
     }
 
+    // 🔒 CRITICAL: Lock camera device to prevent iOS from switching lenses
+    // Re-apply device constraint WITH torch to keep same camera active
+    const currentDeviceId = selectedCameraDeviceId || videoTrack.getSettings()?.deviceId;
+    
+    if (currentDeviceId) {
+      console.log('🔒 Locking camera device during torch enable:', currentDeviceId.substring(0, 12) + '...');
+    }
+    
     // Try to apply torch constraint using multiple methods for better compatibility
     
-    // Method 1: Advanced constraints (most compatible)
+    // Method 1: Advanced constraints with device lock (most compatible)
     try {
-      await videoTrack.applyConstraints({
+      const constraints = {
         advanced: [{ torch: true }]
-      });
+      };
+      
+      // Add device lock if we have deviceId
+      if (currentDeviceId) {
+        constraints.deviceId = { exact: currentDeviceId };
+      }
+      
+      await videoTrack.applyConstraints(constraints);
       
       // Verify torch is actually enabled
       const settings = videoTrack.getSettings();
       if (settings.torch === true) {
         console.log('✅ Torch enabled successfully via advanced constraints');
         console.log(`🔦 Camera: ${videoTrack.label}`);
+        console.log(`🔒 Device locked: ${settings.deviceId?.substring(0, 12)}...`);
         
         const result = { success: true, method: 'advanced', cameraLabel: videoTrack.label };
         
@@ -1416,18 +1432,42 @@ export const disableTorch = async (videoRef) => {
       return { success: true, reason: 'ALREADY_OFF' };
     }
 
+    // 🔒 CRITICAL: Lock camera device to prevent iOS from switching lenses when disabling torch
+    const currentDeviceId = selectedCameraDeviceId || videoTrack.getSettings()?.deviceId;
+    
+    if (currentDeviceId) {
+      console.log('🔒 Locking camera device during torch disable:', currentDeviceId.substring(0, 12) + '...');
+    }
+    
     // Try to disable torch
     try {
-      await videoTrack.applyConstraints({
+      const constraints = {
         advanced: [{ torch: false }]
-      });
+      };
+      
+      // Add device lock if we have deviceId
+      if (currentDeviceId) {
+        constraints.deviceId = { exact: currentDeviceId };
+      }
+      
+      await videoTrack.applyConstraints(constraints);
+      
+      // Verify the device didn't change
+      const settings = videoTrack.getSettings();
       console.log('✅ Torch disabled successfully');
+      console.log(`🔒 Device still locked: ${settings.deviceId?.substring(0, 12)}...`);
+      
       return { success: true };
     } catch (advancedError) {
       console.warn('⚠️ Advanced torch disable failed, trying basic:', advancedError.message);
       
       try {
-        await videoTrack.applyConstraints({ torch: false });
+        const constraints = { torch: false };
+        if (currentDeviceId) {
+          constraints.deviceId = { exact: currentDeviceId };
+        }
+        
+        await videoTrack.applyConstraints(constraints);
         console.log('✅ Torch disabled via basic constraint');
         return { success: true, method: 'basic' };
       } catch (basicError) {
