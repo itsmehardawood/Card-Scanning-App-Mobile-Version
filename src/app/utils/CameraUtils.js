@@ -47,6 +47,12 @@ const isWebView = () => {
   return isIOSWebView || isAndroidWebView || window.ReactNativeWebView !== undefined;
 };
 
+// 📱 iOS DETECTION
+const isIOSDevice = () => {
+  const userAgent = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(userAgent);
+};
+
 // 📱 DEVICE TYPE DETECTION
 const isSamsungDevice = () => {
   const userAgent = navigator.userAgent.toLowerCase();
@@ -280,9 +286,32 @@ const checkCameraTorchSupport = async (deviceId) => {
 // 📷 FIND BEST CAMERA FOR CARD SCANNING (with torch preference)
 export const findBestCameraForScan = async (scanSide = 'back') => {
   console.log(`📷 Finding best camera for ${scanSide}-side card scan...`);
-  console.log(`📱 Device info: Samsung=${isSamsungDevice()}, WebView=${isWebView()}`);
+  console.log(`📱 Device info: Samsung=${isSamsungDevice()}, WebView=${isWebView()}, iOS=${isIOSDevice()}`);
   
-  // Log to server for remote debugging
+  // 🍎 iOS WORKAROUND: Skip multi-camera selection entirely on iOS
+  // iOS switches camera lenses when torch is toggled, causing zoom issues
+  if (isIOSDevice()) {
+    console.log('🍎 iOS detected - using simple facingMode approach (no torch requirements)');
+    console.log('🍎 This prevents iOS from switching between telephoto/wide/ultra-wide lenses');
+    
+    await logToServer('device-info', 'iOS detected - skipping multi-camera selection', {
+      deviceInfo: {
+        isIOS: true,
+        userAgent: navigator.userAgent
+      },
+      extra: { scanSide }
+    });
+    
+    return {
+      deviceId: null, // Use default
+      hasTorch: false, // Don't use torch on iOS
+      facing: scanSide === 'front' ? 'front' : 'back',
+      label: 'iOS Default Camera',
+      skipTorch: true // Signal to skip torch operations
+    };
+  }
+  
+  // Log to server for remote debugging (non-iOS devices)
   await logToServer('device-info', 'Camera scan started', {
     deviceInfo: {
       isSamsung: isSamsungDevice(),
@@ -748,8 +777,8 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
     console.log('📷 Searching for optimal camera...');
     const bestCamera = await findBestCameraForScan(scanSide);
     
-    // Step 3.1: Check if camera selection returned an error
-    if (bestCamera.error) {
+    // Step 3.1: Check if camera selection returned an error (skip for iOS with skipTorch flag)
+    if (bestCamera.error && !bestCamera.skipTorch) {
       console.log('❌ Camera selection failed:', bestCamera.error);
       console.log('📝 Error message:', bestCamera.message);
       
@@ -778,8 +807,8 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
       error: bestCamera.error || 'none'
     });
     
-    // Step 3.2: For back-side scan, verify torch capability (unless in TEST_MODE)
-    if (scanSide === 'back' && !bestCamera.hasTorch) {
+    // Step 3.2: For back-side scan, verify torch capability (unless in TEST_MODE or iOS)
+    if (scanSide === 'back' && !bestCamera.hasTorch && !bestCamera.skipTorch) {
       if (TEST_MODE) {
         console.log('🧪 TEST MODE: Skipping torch verification for back-side scan');
         console.log('🧪 Proceeding without torch capability for testing purposes');
@@ -791,6 +820,10 @@ export const initializeCamera = async (videoRef, onPermissionDenied = null, scan
         }
         throw new Error('NO_TORCH_CAMERA: ' + errorMsg);
       }
+    }
+    
+    if (bestCamera.skipTorch) {
+      console.log('🍎 iOS mode: Torch requirements skipped - using default camera');
     }
     
     if (scanSide === 'back' && bestCamera.hasTorch) {
