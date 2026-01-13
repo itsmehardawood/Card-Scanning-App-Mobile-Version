@@ -409,11 +409,31 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       deviceIdLength: c.deviceId ? c.deviceId.length : 0
     })));
     
-    // 🎯 PRIORITIZE CAMERAS: Score and sort to prefer wide cameras over telephoto
+    // 🎯 FILTER AND PRIORITIZE CAMERAS: Remove telephoto/ultra-wide, keep only main/wide cameras
     if (scanSide === 'back' && targetCameras.length > 1) {
-      console.log('🎯 Scoring cameras to prioritize wide cameras...');
+      console.log('🎯 Filtering and scoring cameras to prioritize main/wide cameras...');
       
-      const scoredCameras = targetCameras.map(cam => ({
+      // STEP 1: Filter out telephoto and ultra-wide cameras completely
+      const filteredCameras = targetCameras.filter(cam => {
+        const label = (cam.label || '').toLowerCase();
+        const isTelephoto = label.includes('telephoto') || label.includes('tele') || label.includes('zoom');
+        const isUltraWide = label.includes('ultra');
+        
+        if (isTelephoto) {
+          console.log(`🚫 EXCLUDING telephoto camera: ${cam.label}`);
+          return false;
+        }
+        if (isUltraWide) {
+          console.log(`🚫 EXCLUDING ultra-wide camera: ${cam.label}`);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log(`✅ Filtered ${targetCameras.length} → ${filteredCameras.length} cameras (removed telephoto/ultra-wide)`);
+      
+      // STEP 2: Score remaining cameras and sort
+      const scoredCameras = filteredCameras.map(cam => ({
         ...cam,
         score: scoreCameraForScanning(cam)
       }));
@@ -421,15 +441,15 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       // Sort by score (highest first)
       scoredCameras.sort((a, b) => b.score - a.score);
       
-      console.log('🎯 Camera priority ranking:');
+      console.log('🎯 Camera priority ranking (after filtering):');
       scoredCameras.forEach((cam, idx) => {
         console.log(`  ${idx + 1}. [Score: ${cam.score}] ${cam.label}`);
       });
       
-      // Update targetCameras with sorted list
+      // Update targetCameras with filtered and sorted list
       targetCameras = scoredCameras;
       
-      console.log('✅ Cameras sorted - will test wide cameras first, telephoto last');
+      console.log('✅ Will ONLY test main/wide cameras for torch - NO telephoto or ultra-wide');
     }
     
     // For back-side scan, prioritize torch-capable cameras
