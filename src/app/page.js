@@ -476,12 +476,6 @@ const CardDetectionApp = () => {
   // Flashlight control functions
   const enableFlashlight = async () => {
     try {
-      // 📱 Skip flashlight on iOS to avoid torch lens selection and zoom issues
-      if (isIOSDeviceDetected) {
-        console.log('📱 iOS device - skipping flashlight to avoid lens switching');
-        return false;
-      }
-
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -494,8 +488,8 @@ const CardDetectionApp = () => {
           setFlashlightEnabled(true);
           console.log("🔦 Flashlight enabled");
           
-          // Apply zoom when flashlight is enabled
-          await applyZoom(2);
+          // ❌ REMOVED: Do NOT apply zoom - this was causing the zoomed view issue
+          // await applyZoom(2);
           
           return true;
         } else {
@@ -511,12 +505,6 @@ const CardDetectionApp = () => {
 
   const disableFlashlight = async () => {
     try {
-      // 📱 Skip flashlight disable on iOS
-      if (isIOSDeviceDetected) {
-        console.log('📱 iOS device - skipping flashlight disable');
-        return false;
-      }
-
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -533,17 +521,17 @@ const CardDetectionApp = () => {
           console.log("🔦 Flashlight already disabled, skipping");
         }
         
-        // Reset zoom when flashlight is disabled
-        await resetZoom();
+        // ❌ REMOVED: Do NOT reset zoom - zoom was never applied
+        // await resetZoom();
       }
     } catch (error) {
       console.error("❌ Error disabling flashlight:", error);
-      // Try to reset zoom even if flashlight disable failed
-      try {
-        await resetZoom();
-      } catch (zoomError) {
-        console.error("❌ Error resetting zoom:", zoomError);
-      }
+      // ❌ REMOVED: zoom reset
+      // try {
+      //   await resetZoom();
+      // } catch (zoomError) {
+      //   console.error("❌ Error resetting zoom:", zoomError);
+      // }
     }
   };
 
