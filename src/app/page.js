@@ -197,6 +197,8 @@ const CardDetectionApp = () => {
 
   // Trigger voice verification popup after successful scan
   useEffect(() => {
+    console.log(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
+    
     if (currentPhase === "awaiting-voice-verification") {
       console.log("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
       
@@ -224,7 +226,7 @@ const CardDetectionApp = () => {
           
           console.log("   └─ ✅ All camera tracks stopped");
         } else {
-          console.log("   └─ No active camera stream found");
+          console.log("   └─ ⚠️ No active camera stream found (might already be stopped)");
         }
         
         // Clear video element completely
