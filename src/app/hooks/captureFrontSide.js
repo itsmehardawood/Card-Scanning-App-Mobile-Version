@@ -220,6 +220,7 @@ export const captureAndSendFramesFront = async (
     
     setIsProcessing(false);
     console.log("✅ [FRONT CLEANUP] Cleanup complete");
+  };
     
     const countBackSideFeatures = (apiResponse) => {
       const features = {
