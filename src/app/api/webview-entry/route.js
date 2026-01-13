@@ -104,6 +104,12 @@ export async function POST(request) {
 
           console.log("📞 Phone Number Extracted:", phoneNumber);
         }
+        
+        // Use dummy number if phoneNumber is NA, null, or empty for testing
+        if (!phoneNumber || phoneNumber === "NA" || phoneNumber.trim() === "") {
+          phoneNumber = "923020447030";
+          console.log("📞 Using dummy phone number for testing:", phoneNumber);
+        }
 
         console.log("✅ Device Info Parsed Successfully");
 
