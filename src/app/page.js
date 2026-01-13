@@ -668,16 +668,17 @@ const CardDetectionApp = () => {
             });
 
             // Store phone number in localStorage if available
-            if (sessionData.phoneNumber) {
-              localStorage.setItem("phoneNumber", sessionData.phoneNumber);
+            // Use dummy number (923020447030) if not provided for testing
+            const finalPhoneNumber = sessionData.phoneNumber || "923020447030";
+            localStorage.setItem("phoneNumber", finalPhoneNumber);
 
-              console.log(" Phone number stored in localStorage:", sessionData.phoneNumber);
-            }
+            console.log("📞 Phone number stored in localStorage:", finalPhoneNumber, 
+              sessionData.phoneNumber ? "(from device)" : "(using dummy for testing)");
 
             const authObj = {
               merchantId: sessionData.merchantId,
               authToken: sessionData.authToken,
-              phoneNumber: sessionData.phoneNumber || null,
+              phoneNumber: finalPhoneNumber,
               timestamp: Date.now(),
               source: "secure_session",
             };
