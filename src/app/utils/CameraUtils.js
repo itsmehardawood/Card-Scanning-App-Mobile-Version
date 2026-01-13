@@ -115,6 +115,47 @@ export const enumerateVideoDevices = async () => {
   }
 };
 
+// 🎯 SCORE CAMERA QUALITY FOR CARD SCANNING
+// Higher score = better camera for card scanning (avoid telephoto, prefer wide)
+const scoreCameraForScanning = (device) => {
+  const label = (device.label || '').toLowerCase();
+  let score = 0;
+  
+  // 🏆 BEST: Wide/Main cameras (normal field of view)
+  if (label.includes('dual wide') || label.includes('wide camera')) {
+    score += 100; // Highest priority
+  }
+  if (label.includes('main')) {
+    score += 90;
+  }
+  if (label.includes('wide') && !label.includes('ultra')) {
+    score += 80;
+  }
+  
+  // ✅ GOOD: Generic back cameras
+  if (label.includes('back camera') && !label.includes('ultra') && !label.includes('telephoto')) {
+    score += 70;
+  }
+  if (label.includes('dual camera')) {
+    score += 60;
+  }
+  if (label.includes('triple camera')) {
+    score += 50; // Lower priority - might use telephoto internally
+  }
+  
+  // ⚠️ AVOID: Ultra wide (fish-eye distortion)
+  if (label.includes('ultra')) {
+    score -= 50;
+  }
+  
+  // ❌ WORST: Telephoto cameras (too zoomed in)
+  if (label.includes('telephoto') || label.includes('tele') || label.includes('zoom')) {
+    score -= 100; // Strongly avoid
+  }
+  
+  return score;
+};
+
 // 🔍 CLASSIFY CAMERA AS FRONT OR BACK FACING
 const classifyCameraFacing = (device) => {
   const label = (device.label || '').toLowerCase();
@@ -367,6 +408,29 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       deviceIdType: typeof c.deviceId,
       deviceIdLength: c.deviceId ? c.deviceId.length : 0
     })));
+    
+    // 🎯 PRIORITIZE CAMERAS: Score and sort to prefer wide cameras over telephoto
+    if (scanSide === 'back' && targetCameras.length > 1) {
+      console.log('🎯 Scoring cameras to prioritize wide cameras...');
+      
+      const scoredCameras = targetCameras.map(cam => ({
+        ...cam,
+        score: scoreCameraForScanning(cam)
+      }));
+      
+      // Sort by score (highest first)
+      scoredCameras.sort((a, b) => b.score - a.score);
+      
+      console.log('🎯 Camera priority ranking:');
+      scoredCameras.forEach((cam, idx) => {
+        console.log(`  ${idx + 1}. [Score: ${cam.score}] ${cam.label}`);
+      });
+      
+      // Update targetCameras with sorted list
+      targetCameras = scoredCameras;
+      
+      console.log('✅ Cameras sorted - will test wide cameras first, telephoto last');
+    }
     
     // For back-side scan, prioritize torch-capable cameras
     if (scanSide === 'back' && targetCameras.length > 0) {
