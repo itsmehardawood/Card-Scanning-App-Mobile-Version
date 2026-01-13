@@ -167,32 +167,49 @@ const VoiceVerification = ({
       });
       
       // Determine best MIME type for mobile compatibility
-      // Prioritize mp3 for maximum compatibility across all platforms
+      // MediaRecorder does NOT support audio/mpeg - use native formats only
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      let mimeType = 'audio/mpeg'; // Default to mp3
+      let mimeType = '';
       
-      const supportedTypes = [
-        'audio/mpeg',           // MP3 (best compatibility)
-        'audio/mp4',            // M4A
-        'audio/webm',           // WebM
-        'audio/webm;codecs=opus',
-        'audio/ogg',
-        'audio/wav'
-      ];
+      const supportedTypes = isIOS 
+        ? [
+            'audio/mp4',                // iOS native
+            'audio/wav',
+            'audio/webm',
+            'audio/ogg'
+          ]
+        : [
+            'audio/webm;codecs=opus',   // Android native (best quality)
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg',
+            'audio/wav'
+          ];
       
       for (const type of supportedTypes) {
         if (MediaRecorder.isTypeSupported(type)) {
           mimeType = type;
-          logToAndroid("Using MIME type", { mimeType, platform: isIOS ? 'iOS' : 'Android' });
+          logToAndroid("✅ MediaRecorder supports MIME type", { 
+            mimeType, 
+            platform: isIOS ? 'iOS' : 'Android' 
+          });
           break;
         }
       }
       
-      // Create MediaRecorder with Android-compatible settings
-      const mediaRecorder = new MediaRecorder(stream, { 
-        mimeType,
-        audioBitsPerSecond: 128000
-      });
+      if (!mimeType) {
+        logToAndroid("⚠️ No preferred MIME type supported, using browser default");
+        // Let browser choose default format
+      }
+      
+      // Create MediaRecorder with mobile-compatible settings
+      const mediaRecorder = mimeType 
+        ? new MediaRecorder(stream, { 
+            mimeType,
+            audioBitsPerSecond: 128000
+          })
+        : new MediaRecorder(stream); // Use browser default if no MIME type supported
+        
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -204,13 +221,16 @@ const VoiceVerification = ({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        // Use the actual MIME type from the MediaRecorder
+        const actualMimeType = mediaRecorderRef.current?.mimeType || mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
         setAudioBlob(audioBlob);
         setHasRecorded(true);
         
         logToAndroid("Recording stopped", { 
           blobSize: audioBlob.size,
           blobType: audioBlob.type,
+          actualMimeType: actualMimeType,
           chunks: audioChunksRef.current.length
         });
         
@@ -358,11 +378,11 @@ const VoiceVerification = ({
       formData.append("user_id", phoneNumber);
       formData.append("merchant_id", merchantId);
       
-      // Use appropriate file extension based on blob type
-      let fileName = "voice_recording.mp3"; // Default to mp3
-      if (audioBlob.type.includes('mpeg')) {
-        fileName = "voice_recording.mp3";
-      } else if (audioBlob.type.includes('mp4')) {
+      // Use appropriate file extension based on actual blob type
+      let fileName = "voice_recording.webm"; // Default
+      let explicitType = audioBlob.type; // Use actual blob type
+      
+      if (audioBlob.type.includes('mp4')) {
         fileName = "voice_recording.m4a";
       } else if (audioBlob.type.includes('ogg')) {
         fileName = "voice_recording.ogg";
@@ -372,7 +392,9 @@ const VoiceVerification = ({
         fileName = "voice_recording.webm";
       }
       
-      formData.append("file", audioBlob, fileName);
+      // Create a new blob with explicit type to ensure MIME type is preserved
+      const fileBlob = new Blob([audioBlob], { type: explicitType });
+      formData.append("file", fileBlob, fileName);
 
       const apiEndpoint = mode === "verify" 
         ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
@@ -384,7 +406,9 @@ const VoiceVerification = ({
         merchant_id: merchantId,
         file_size: audioBlob.size,
         file_type: audioBlob.type,
-        file_name: fileName
+        file_name: fileName,
+        explicit_type: explicitType,
+        blob_size_check: audioBlob.size > 0 ? '✅ Has data' : '❌ EMPTY BLOB'
       });
 
       // Send to API
