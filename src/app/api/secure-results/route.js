@@ -71,10 +71,12 @@ export async function POST(request) {
     console.log(`   └─ Android access: BLOCKED`);
 
     // Return ONLY the result ID (not the actual encrypted data)
+    // 🔒 CRITICAL: complete_scan = false prevents mobile from proceeding
     return NextResponse.json({
       success: true,
       resultId,
       status: "pending_voice_verification",
+      complete_scan: false, // 🚫 Mobile MUST NOT proceed until voice verification
       message: "Scan completed. Awaiting voice verification.",
     });
   } catch (error) {

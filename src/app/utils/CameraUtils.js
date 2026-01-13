@@ -525,22 +525,22 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
         console.log(`🔦 Calling checkCameraTorchSupport...`);
         
         const torchResult = await checkCameraTorchSupport(camera.deviceId);
-        console.log(`🔦 Torch test result:`, torchResult);
+        // console.log(`🔦 Torch test result:`, torchResult);
         
         // Log torch test result to server
-        await logToServer('torch-test', `Torch test: ${camera.label}`, {
-          camera: {
-            label: camera.label,
-            deviceId: camera.deviceId,
-            facing: camera.facing
-          },
-          torchResult: {
-            supported: torchResult.supported,
-            error: torchResult.error,
-            capabilities: torchResult.capabilities,
-            trackLabel: torchResult.trackLabel
-          }
-        });
+        // await logToServer('torch-test', `Torch test: ${camera.label}`, {
+        //   camera: {
+        //     label: camera.label,
+        //     deviceId: camera.deviceId,
+        //     facing: camera.facing
+        //   },
+        //   torchResult: {
+        //     supported: torchResult.supported,
+        //     error: torchResult.error,
+        //     capabilities: torchResult.capabilities,
+        //     trackLabel: torchResult.trackLabel
+        //   }
+        // });
         
         if (torchResult.supported) {
           console.log('🔦 ========================================');
