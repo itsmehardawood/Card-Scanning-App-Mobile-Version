@@ -11,7 +11,7 @@ export async function POST(request) {
     const logType = data.type || 'info';
     const logPrefix = {
       'camera-selection': '📷 CAMERA SELECTION',
-      'torch-test': '🔦 TORCH TEST',
+      // 'torch-test': '🔦 TORCH TEST',
       'device-info': '📱 DEVICE INFO',
       'error': '❌ CAMERA ERROR',
       'success': '✅ CAMERA SUCCESS',
