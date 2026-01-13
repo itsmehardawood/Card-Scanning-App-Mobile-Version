@@ -166,20 +166,19 @@ const VoiceVerification = ({
         trackLabel: stream.getAudioTracks()[0]?.label
       });
       
-      // Determine best MIME type for Android WebView
+      // Determine best MIME type for mobile compatibility
+      // iOS prefers mp4/m4a, Android prefers webm
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       let mimeType = 'audio/webm';
-      const supportedTypes = [
-        'audio/webm',
-        'audio/webm;codecs=opus',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav'
-      ];
+      
+      const supportedTypes = isIOS 
+        ? ['audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/webm'] // iOS priority
+        : ['audio/webm', 'audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg', 'audio/wav']; // Android priority
       
       for (const type of supportedTypes) {
         if (MediaRecorder.isTypeSupported(type)) {
           mimeType = type;
-          logToAndroid("Using MIME type", { mimeType });
+          logToAndroid("Using MIME type", { mimeType, platform: isIOS ? 'iOS' : 'Android' });
           break;
         }
       }
@@ -356,9 +355,13 @@ const VoiceVerification = ({
       
       // Use appropriate file extension based on blob type
       let fileName = "voice_recording.webm";
-      if (audioBlob.type.includes('mp4')) fileName = "voice_recording.mp4";
-      else if (audioBlob.type.includes('ogg')) fileName = "voice_recording.ogg";
-      else if (audioBlob.type.includes('wav')) fileName = "voice_recording.wav";
+      if (audioBlob.type.includes('mp4') || audioBlob.type.includes('mpeg')) {
+        fileName = "voice_recording.m4a"; // Use m4a for better iOS compatibility
+      } else if (audioBlob.type.includes('ogg')) {
+        fileName = "voice_recording.ogg";
+      } else if (audioBlob.type.includes('wav')) {
+        fileName = "voice_recording.wav";
+      }
       
       formData.append("file", audioBlob, fileName);
 
