@@ -69,24 +69,8 @@ const VoiceVerification = ({
       logToAndroid("Voice Verification opened", diagnosticInfo);
       setDebugInfo(`WebView: ${isWebView()} | Mode: ${mode}`);
       
-      // Run microphone test WITHOUT stopping camera to diagnose issue
-      logToAndroid("🧪 DIAGNOSTIC: Testing microphone access WITHOUT camera stop");
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          logToAndroid("✅ DIAGNOSTIC: Microphone accessible!", {
-            tracks: stream.getAudioTracks().length,
-            trackLabel: stream.getAudioTracks()[0]?.label
-          });
-          // Stop immediately - this is just a test
-          stream.getTracks().forEach(t => t.stop());
-        })
-        .catch(err => {
-          logToAndroid("❌ DIAGNOSTIC: Microphone NOT accessible even without camera", {
-            error: err.name,
-            message: err.message,
-            diagnosis: "WebView microphone access is blocked - check WebChromeClient.onPermissionRequest"
-          });
-        });
+      // Camera should already be stopped by page.js before this component opens
+      logToAndroid("✅ Voice Verification ready - camera should already be stopped by parent");
     }
   }, [isOpen, mode]);
 
