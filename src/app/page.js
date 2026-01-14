@@ -19,6 +19,7 @@ import {
 import { sendFrameToAPI, reportFailure } from "./utils/apiService";
 import { useDetection } from "./hooks/UseDetection";
 import Image from "next/image";
+import { initializeBridgeInterceptor, markVoicePending, releasePendingBridgeMessage } from "./utils/bridgeInterceptor";
 
 // Constants for attempt limits and timeouts
 const MAX_ATTEMPTS = 5;
@@ -209,6 +210,8 @@ const CardDetectionApp = () => {
     logPhase(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
     
     if (currentPhase === "awaiting-voice-verification") {
+      // Mark voice pending so bridge interceptor buffers scan-complete payloads
+      try { markVoicePending(true); } catch {}
       logPhase("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
       
       // 🔒 CRITICAL: FORCE STOP CAMERA BEFORE VOICE VERIFICATION
@@ -272,6 +275,9 @@ const CardDetectionApp = () => {
 
   // Initialize window.scanStatus for Android polling
   useEffect(() => {
+    // Install native bridge interceptor early (idempotent)
+    try { initializeBridgeInterceptor(); } catch {}
+
     // Set initial incomplete status
     window.scanStatus = {
       complete_scan: false,
@@ -1804,22 +1810,13 @@ const CardDetectionApp = () => {
           has_encrypted_data: !!finalData.encrypted_data
         });
 
-        // 🚀 ANDROID COMPATIBILITY: Make a fetch request to trigger Android's fetch interceptor
-        // Android is listening for fetch responses to "api.cardnest.io/detect"
-        // This ensures Android code doesn't need any changes
-        logToServer("📡 Triggering Android fetch interceptor with scan complete response");
-        
-        // Fire and forget - don't block on this
-        fetch('https://api.cardnest.io/detect', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(window.scanStatus)
-        }).then(resp => {
-          logToServer("📡 Android fetch interceptor triggered successfully");
-        }).catch(err => {
-          logToServer("⚠️ Android fetch trigger failed (non-critical)", { error: err.message });
-          // This is non-critical - window.scanStatus is already set
-        });
+        // ✅ Release any buffered native bridge message now that voice is verified
+        try {
+          const released = releasePendingBridgeMessage();
+          logToServer("🔓 Released buffered native message to Android/iOS", { released });
+        } catch (e) {
+          logToServer("⚠️ Failed to release buffered native message", { error: e?.message });
+        }
 
         // Cleanup
         setSecureResultId(null);
