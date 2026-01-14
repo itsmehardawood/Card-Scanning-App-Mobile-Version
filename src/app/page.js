@@ -272,6 +272,12 @@ const CardDetectionApp = () => {
   // Zoom control functions
   const applyZoom = async (zoomLevel = 1.5) => {
     try {
+      // 📱 Skip zoom on iOS to avoid lens switching and zoom artifacts
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping zoom to avoid lens switching');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -301,6 +307,12 @@ const CardDetectionApp = () => {
 
   const resetZoom = async () => {
     try {
+      // 📱 Skip zoom reset on iOS
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping zoom reset');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -321,6 +333,12 @@ const CardDetectionApp = () => {
   // Flashlight control functions
   const enableFlashlight = async () => {
     try {
+      // 📱 Skip flashlight on iOS to avoid torch lens selection and zoom issues
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping flashlight to avoid lens switching');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -350,6 +368,12 @@ const CardDetectionApp = () => {
 
   const disableFlashlight = async () => {
     try {
+      // 📱 Skip flashlight disable on iOS
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping flashlight disable');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
