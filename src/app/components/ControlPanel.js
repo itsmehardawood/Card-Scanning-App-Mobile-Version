@@ -12,6 +12,8 @@ const ControlPanel = ({
   onReset,
   onTryAgain,
   onStartOver,
+  onFakeCardRetry,
+  fakeCardDetectedPhase,
   frontScanState,
   countdown,
   errorMessage,
@@ -20,7 +22,8 @@ const ControlPanel = ({
   isProcessing,
   attemptCount,
   maxAttempts,
-  maxAttemptsReached
+  maxAttemptsReached,
+  showCaptureSuccessMessage
 }) => {
   const isActive = detectionActive || isProcessing || countdown > 0;
   const isLastAttempt = attemptCount === maxAttempts - 1;
@@ -42,6 +45,72 @@ const ControlPanel = ({
         finalOcrResults={finalOcrResults} 
         onReset={onReset} 
       />
+    );
+  }
+
+  // Capture success message - show when frame is captured successfully
+  // if (showCaptureSuccessMessage) {
+  //   return (
+  //     <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+  //       <div className="text-center">
+  //         <div className="mb-4">
+  //           {/* Processing Animation */}
+  //           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-3">
+  //             <div className="flex space-x-1">
+  //               <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+  //               <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+  //               <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+  //             </div>
+  //           </div>
+            
+  //           <h3 className="text-lg sm:text-xl font-semibold text-blue-600 mb-2">Processing Security Scan...</h3>
+  //           <p className="text-gray-700 mb-3">
+  //             Please wait while we perform an intelligence security scan on your card.
+  //           </p>
+            
+  //           {/* Progress indicator */}
+  //           <div className="mt-4">
+  //             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+  //               <div className="flex items-center justify-center space-x-2">
+  //                 <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+  //                 <span className="text-sm text-blue-700 font-medium">Scanning in progress...</span>
+  //               </div>
+  //             </div>
+  //           </div>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+  // Fake card detected - show retry option without counting as failed attempt
+  if (currentPhase === 'fake-card-error') {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="text-center">
+          <div className="mb-4">
+            <h3 className="text-lg sm:text-xl font-semibold text-red-600 mb-2">Unacceptable Card Detection</h3>
+            <p className="text-red-700 mb-3">{errorMessage || 'Please use an original physical card.'}</p>
+            
+           
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={onFakeCardRetry}
+              className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Try Again
+            </button>
+            {/* <button
+              onClick={onStartOver}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Start Over
+            </button> */}
+          </div>
+        </div>
+      </div>
     );
   }
 

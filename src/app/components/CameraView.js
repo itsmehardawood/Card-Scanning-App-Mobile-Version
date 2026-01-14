@@ -10,6 +10,8 @@ const CameraView = ({
   isProcessing,
   showPromptText,
   promptText,
+  capturedImage, // Add captured image prop
+  showCaptureSuccessMessage, // Add prop to control success message display
 }) => {
   const [showMotionPrompt, setShowMotionPrompt] = useState(false);
   const [motionPromptShown, setMotionPromptShown] = useState(false);
@@ -24,7 +26,7 @@ const CameraView = ({
       // Hide the prompt after 3 seconds
       const timer = setTimeout(() => {
         setShowMotionPrompt(false);
-      }, 3000);
+      }, 1000);
 
       return () => clearTimeout(timer);
     }
@@ -88,7 +90,8 @@ const CameraView = ({
   };
 
   // Check if we should show the scanning animation
-  const showScanningAnimation = detectionActive && (
+  // Only show when we have a captured static frame and are actively scanning
+  const showScanningAnimation = detectionActive && capturedImage && (
     currentPhase === 'front' || 
     currentPhase === 'back'
   );
@@ -125,7 +128,7 @@ const CameraView = ({
   return (
     <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
       <div className="relative overflow-hidden">
-        {/* Camera Video */}
+        {/* Camera Video - ALWAYS visible to maintain dimensions for cropping */}
         <video
           ref={videoRef}
           autoPlay
@@ -133,13 +136,51 @@ const CameraView = ({
           muted
           className="w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover"
         />
+        
+        {/* Show captured static image during scanning (absolute positioned overlay) */}
+        {capturedImage && (currentPhase === 'front' || currentPhase === 'back') && (
+          <img
+            src={capturedImage}
+            alt="Captured card"
+            className="absolute inset-0 w-full h-64 sm:h-80 lg:h-[420px] rounded-lg object-cover z-5"
+          />
+        )}
 
-        {/* Hidden Canvas */}
+        {/* Success Message Overlay - Show even without captured image during initial 4 seconds */}
+        {showCaptureSuccessMessage && (currentPhase === 'front' || currentPhase === 'back') && (
+          <div className="absolute inset-0 flex items-center justify-center z-35">
+            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-4 mx-3 max-w-md text-center shadow-lg border-2 border-green-500">
+              {/* Success Icon */}
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 rounded-full mb-3">
+                <svg 
+                  className="w-10 h-10 text-green-600" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={3} 
+                    d="M5 13l4 4L19 7" 
+                  />
+                </svg>
+              </div>
+              
+              <h3 className="text-[14px] font-semibold text-green-400 mb-2">Frame Captured Successfully!</h3>
+              <p className="text-gray-200 text-[12px] leading-relaxed">
+                Your card frame has been captured successfully. We will now proceed with an intelligence security scan.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden Canvas - ALWAYS rendered to keep ref valid */}
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Card Frame (Thinner) */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative w-3/4 h-3/4">
+          <div id="card-border-frame" className="relative w-3/4 h-3/4">
             {/* 4 Corner Borders (thinner) */}
             <div className="absolute top-0 left-0 w-6 h-1 bg-white" />
             <div className="absolute top-0 left-0 w-1 h-6 bg-white" />
@@ -260,16 +301,16 @@ const CameraView = ({
 
         {/* Initial Scanning Recommendation Prompt - Show only in idle phase */}
         {showInitialPrompt && currentPhase === 'idle' && (
-          <div className="absolute bottom-4 left-4 right-4 z-30">
-            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-4 text-center shadow-lg border-2 border-blue-500">
+          <div className="absolute bottom-8 left-4 right-4 z-30">
+            <div className="bg-black/90 backdrop-blur-sm rounded-lg p-[15px] text-center shadow-lg border-2 border-blue-500">
               
               {/* Title */}
-              <div className="text-blue-600 text-lg font-semibold mb-2">
+              <div className="text-blue-600 text-[14px] font-semibold mb-2">
                Guidelines for better scanning
               </div>
 
               {/* Message */}
-              <div className="text-gray-100 text-sm leading-relaxed mb-3">
+              <div className="text-gray-100 text-[12px] leading-relaxed mb-2">
                 We recommend putting the card on a flat surface, avoiding dark places, and positioning your card in the camera view for better scanning.
               </div>
 

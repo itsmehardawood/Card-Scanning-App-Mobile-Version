@@ -14,6 +14,7 @@ import {
   checkCameraPermissions,
   requestCameraPermissions,
   isCameraWorking,
+  isIOSDevice,
 } from "./utils/CameraUtils";
 import { sendFrameToAPI, reportFailure } from "./utils/apiService";
 import { useDetection } from "./hooks/UseDetection";
@@ -49,6 +50,7 @@ const CardDetectionApp = () => {
   const [showPermissionAlert, setShowPermissionAlert] = useState(false);
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [isIOSDeviceDetected, setIsIOSDeviceDetected] = useState(false);
 
   // Prompt text state for positioning guidance
   const [showPromptText, setShowPromptText] = useState(false);
@@ -58,6 +60,7 @@ const CardDetectionApp = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const [maxAttemptsReached, setMaxAttemptsReached] = useState(false);
   const [currentOperation, setCurrentOperation] = useState(""); // 'front', 'back'
+  const [fakeCardDetectedPhase, setFakeCardDetectedPhase] = useState(null); // Track which phase detected fake card
   const [debugInfo, setDebugInfo] = useState("");
   const [existingLogoUrl, setExistingLogoUrl] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -78,6 +81,13 @@ const CardDetectionApp = () => {
     motionPromptTimestamp: null,
   });
 
+  // Captured image state for displaying static frame during scanning
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [showCaptureSuccessMessage, setShowCaptureSuccessMessage] = useState(false);
+
+  // Flashlight state
+  const [flashlightEnabled, setFlashlightEnabled] = useState(false);
+
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
     display_logo: "",
@@ -94,19 +104,20 @@ const CardDetectionApp = () => {
   const stopRequestedRef = useRef(false);
   const detectionTimeoutRef = useRef(null);
   const currentSessionRef = useRef(null);
+  const backSuccessReceivedRef = useRef(false); // Track if back success already received to prevent double processing
 
   const fetchMerchantDisplayInfo = async (merchantId) => {
     if (!merchantId) {
       console.log("🚫 No merchantId provided to fetchMerchantDisplayInfo");
       return;
-    }
+    } 
 
     try {
       console.log("🔍 Fetching merchant display info for:", merchantId);
       setDebugInfo("Fetching existing display info...");
 
       const response = await fetch(
-        `https://admin.cardnest.io/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
+        `http://52.55.249.9:8001/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
           merchantId
         )}`,
         {
@@ -150,7 +161,7 @@ const CardDetectionApp = () => {
 
           if (display_logo) {
             // 🔒 Force HTTPS
-            const safeLogo = display_logo.replace(/^http:\/\//i, "https://");
+            const safeLogo = display_logo.replace(/^http:\/\//i, "http://");
             console.log("✅ Setting merchant logo:", safeLogo);
             setMerchantLogo(safeLogo);
           }
@@ -178,15 +189,7 @@ const CardDetectionApp = () => {
 
 
 
-  // Helper function to send logs to server
-
-
-  // Device info is now handled in webview-entry POST endpoint
-  // Android sends device_info directly in the POST request
-  // No bridge polling needed anymore! 
-
-
-
+ 
 
 
 
@@ -266,11 +269,125 @@ const CardDetectionApp = () => {
   }
 };
 
+  // Zoom control functions
+  const applyZoom = async (zoomLevel = 1.5) => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.zoom) {
+          const settings = track.getSettings();
+          const maxZoom = capabilities.zoom.max;
+          const minZoom = capabilities.zoom.min;
+          const targetZoom = Math.min(zoomLevel, maxZoom);
+          
+          await track.applyConstraints({
+            advanced: [{ zoom: targetZoom }]
+          });
+          console.log(`🔍 Zoom applied: ${targetZoom}x`);
+          return true;
+        } else {
+          console.log("⚠️ Zoom not supported on this device");
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error applying zoom:", error);
+      return false;
+    }
+  };
+
+  const resetZoom = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.zoom) {
+          await track.applyConstraints({
+            advanced: [{ zoom: capabilities.zoom.min || 1 }]
+          });
+          console.log("🔍 Zoom reset to normal");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error resetting zoom:", error);
+    }
+  };
+
+  // Flashlight control functions
+  const enableFlashlight = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.torch) {
+          await track.applyConstraints({
+            advanced: [{ torch: true }]
+          });
+          setFlashlightEnabled(true);
+          console.log("🔦 Flashlight enabled");
+          
+          // Apply zoom when flashlight is enabled
+          await applyZoom(2);
+          
+          return true;
+        } else {
+          console.log("⚠️ Flashlight not supported on this device");
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error enabling flashlight:", error);
+      return false;
+    }
+  };
+
+  const disableFlashlight = async () => {
+    try {
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        const settings = track.getSettings();
+        
+        // Only disable if flashlight is currently enabled
+        if (settings.torch === true) {
+          await track.applyConstraints({
+            advanced: [{ torch: false }]
+          });
+          setFlashlightEnabled(false);
+          console.log("🔦 Flashlight disabled");
+        } else {
+          console.log("🔦 Flashlight already disabled, skipping");
+        }
+        
+        // Reset zoom when flashlight is disabled
+        await resetZoom();
+      }
+    } catch (error) {
+      console.error("❌ Error disabling flashlight:", error);
+      // Try to reset zoom even if flashlight disable failed
+      try {
+        await resetZoom();
+      } catch (zoomError) {
+        console.error("❌ Error resetting zoom:", zoomError);
+      }
+    }
+  };
+
   // Helper function to handle detection failures with attempt tracking
   const handleDetectionFailure = (message, operation) => {
     console.log(`🚨 Detection failure - Operation: ${operation}, Session ID: ${sessionId}, Current Attempt: ${attemptCount + 1}`);
     clearDetectionTimeout();
     stopRequestedRef.current = true;
+
+    // 🔦 Disable flashlight on failure
+    disableFlashlight();
 
     // Clear all intervals
     if (captureIntervalRef.current) {
@@ -326,6 +443,16 @@ const CardDetectionApp = () => {
     }
   };
 
+  // Wrapper function to handle captured image and show success message
+  const handleCapturedImage = (imageDataUrl) => {
+    setCapturedImage(imageDataUrl);
+    setShowCaptureSuccessMessage(true);
+    // Auto-hide message after 3 seconds
+    setTimeout(() => {
+      setShowCaptureSuccessMessage(false);
+    }, 3000);
+  };
+
   // Custom hook for detection logic - NOW WITH handleDetectionFailure parameter
   const {
     captureAndSendFramesFront,
@@ -341,7 +468,9 @@ const CardDetectionApp = () => {
     setErrorMessage,
     setFrontScanState,
     stopRequestedRef,
-    handleDetectionFailure // ADD THIS PARAMETER
+    handleDetectionFailure, // ADD THIS PARAMETER
+    disableFlashlight, // Pass flashlight control function
+    handleCapturedImage // Pass callback to receive captured image immediately
   );
 
   // Check for authentication data on component mount
@@ -444,8 +573,10 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vYWRtaW4uY2FyZG5lc3QuaW8vYXBpL21lcmNoYW50c2Nhbi9nZW5lcmF0ZVRva2VuIiwiaWF0IjoxNzY0MTU3MzA5LCJleHAiOjE3NjQxNjA5MDksIm5iZiI6MTc2NDE1NzMwOSwianRpIjoiNEdHV2FrUEJMc3RJUWIxYiIsInN1YiI6IjI3NjU4MVYzMzk0NVkyNzAiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3Iiwic2Nhbl9pZCI6ImViYTQyMzY1IiwibWVyY2hhbnRfaWQiOiIyNzY1ODFWMzM5NDVZMjcwIiwiZW5jcnlwdGlvbl9rZXkiOiJFYVhhZlhjM1R0eW4wam5qIiwiZmVhdHVyZXMiOm51bGx9.HUB9W-tfhK1QMZDdGd_SohsRg6GfxvCMTMGnL6-Q2gg",
-           timestamp: Date.now(),
+          authToken:"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3NjcyNDY4ODYsImV4cCI6MTc2NzI1MDQ4NiwibmJmIjoxNzY3MjQ2ODg2LCJqdGkiOiJzdGlJU3k3bGlLSEFjMUlzIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0.EukqBO9x0O2rxPrp88QS4P7hucT5urz1rsy82P_N-00",
+          
+          
+          timestamp: Date.now(),
           source: "development_demo",
         };
 
@@ -501,6 +632,11 @@ const CardDetectionApp = () => {
       
       const initCamera = async () => {
         try {
+          // Detect if iOS device and store in state
+          const iosDevice = isIOSDevice();
+          setIsIOSDeviceDetected(iosDevice);
+          console.log(`📱 Device type - iOS: ${iosDevice}`);
+
           // Check permission status first
           const permissionStatus = await checkCameraPermissions();
           setCameraPermissionStatus(permissionStatus);
@@ -526,8 +662,8 @@ const CardDetectionApp = () => {
         }
       }
     }
-          // Try to initialize camera
-          await initializeCamera(videoRef, handleCameraPermissionError);
+          // Try to initialize camera with iOS flag
+          await initializeCamera(videoRef, handleCameraPermissionError, 'back', iosDevice);
           setCameraInitialized(true);
           setCameraPermissionStatus('granted');
           console.log("✅ Camera initialized successfully");
@@ -658,6 +794,8 @@ const CardDetectionApp = () => {
     setDetectionActive(false);
     setIsProcessing(false);
     setCountdown(0);
+    setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Hide prompt text when stopping
     setShowPromptText(false);
@@ -758,7 +896,8 @@ const CardDetectionApp = () => {
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
 
-      setCurrentPhase("front");
+      // DON'T set phase to 'front' yet - wait for frames to be captured first
+      // setCurrentPhase("front"); // MOVED INSIDE CALLBACK
       
       // Hide prompt text when detection starts
       setShowPromptText(false);
@@ -769,13 +908,27 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront(
+          "front", 
+          currentSessionId, 
+          enableFlashlight,
+          () => {
+            // This callback is called AFTER Frame #2 is captured and displayed
+            // Now it's safe to change phase without hiding the video
+            console.log("🔄 Setting phase to 'front' after frames captured");
+            setCurrentPhase("front");
+          }
+        );
+        
+        // Store captured image for display
+        if (apiResponse?.capturedImage) {
+          setCapturedImage(apiResponse.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
           setDetectionActive(false);
-          // Reset attempt count on successful front scan
-          setAttemptCount(0);
+          // Don't reset attempt count here - only reset on complete success (both front and back)
           setCurrentOperation("");
           setCurrentPhase("ready-for-back");
         }
@@ -783,6 +936,15 @@ const CardDetectionApp = () => {
         console.error("Front side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
+            console.log("🚫 Fake card detected on front side - stopping scan");
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('front');
+            return;
+          }
+          
           handleDetectionFailure(
             `Front side detection failed: ${error.message}`,
             "front"
@@ -836,7 +998,8 @@ const CardDetectionApp = () => {
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
 
-      setCurrentPhase("front");
+      // DON'T set phase to 'front' yet - wait for frames to be captured first
+      // setCurrentPhase("front"); // MOVED INSIDE CALLBACK
       
       // Hide prompt text when detection starts
       setShowPromptText(false);
@@ -847,13 +1010,27 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Front side");
 
       try {
-        await captureAndSendFramesFront("front", currentSessionId);
+        const apiResponse = await captureAndSendFramesFront(
+          "front", 
+          currentSessionId, 
+          enableFlashlight,
+          () => {
+            // This callback is called AFTER Frame #2 is captured and displayed
+            // Now it's safe to change phase without hiding the video
+            console.log("🔄 Setting phase to 'front' after frames captured (startFrontSideDetection)");
+            setCurrentPhase("front");
+          }
+        );
+        
+        // Store captured image for display
+        if (apiResponse?.capturedImage) {
+          setCapturedImage(apiResponse.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
           setDetectionActive(false);
-          // Reset attempt count on successful front scan
-          setAttemptCount(0);
+          // Don't reset attempt count here - only reset on complete success (both front and back)
           setCurrentOperation("");
           setCurrentPhase("ready-for-back");
         }
@@ -861,6 +1038,15 @@ const CardDetectionApp = () => {
         console.error("Front side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
+            console.log("🚫 Fake card detected on front side - stopping scan");
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('front');
+            return;
+          }
+          
           handleDetectionFailure(
             `Front side detection failed: ${error.message}`,
             "front"
@@ -890,12 +1076,19 @@ const CardDetectionApp = () => {
     }
     console.log('🆔 Using session ID for back scan:', sessionId);
 
+    // 🔄 Clear the front side captured image so user sees live video during flashlight phase
+    setCapturedImage(null);
+    setShowCaptureSuccessMessage(false); // Clear success message
+
     // Show prompt text for back side positioning
     setPromptText("Position your card's back side in the camera square frame for security scan");
     setShowPromptText(true);
 
     setCurrentPhase("back-countdown");
     setErrorMessage("");
+
+    // Reset back success flag at start of back detection
+    backSuccessReceivedRef.current = false;
 
     startCountdown(async () => {
       if (stopRequestedRef.current) return;
@@ -910,7 +1103,18 @@ const CardDetectionApp = () => {
       startDetectionTimeout("Back side");
 
       try {
-        const finalResult = await captureAndSendFrames("back", sessionId);
+        const finalResult = await captureAndSendFrames("back", sessionId, enableFlashlight);
+        
+        // 🛡️ CRITICAL: If success was already received, ignore this result completely
+        if (backSuccessReceivedRef.current) {
+          console.log("🛡️ Back success already received, ignoring subsequent result:", finalResult?.status);
+          return;
+        }
+        
+        // Store captured image for display
+        if (finalResult?.capturedImage) {
+          setCapturedImage(finalResult.capturedImage);
+        }
 
         if (!stopRequestedRef.current) {
           clearDetectionTimeout();
@@ -920,20 +1124,33 @@ const CardDetectionApp = () => {
 
           // 🎯 PRIORITY FIX: Match the hook's success logic - status "success" OR "already_completed" is sufficient
           if (finalResult?.status === "success" || finalResult?.status === "already_completed") {
+            // 🛡️ CRITICAL: Mark success received IMMEDIATELY to prevent any subsequent processing
+            backSuccessReceivedRef.current = true;
+            stopRequestedRef.current = true; // Also stop any further detection
+            
             console.log(
               "✅ SUCCESS/ALREADY_COMPLETED STATUS received in page.js - transitioning to 'results'"
             );
             console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}, Complete Scan: ${finalResult.complete_scan}`);
+            
+            // 🔦 Disable flashlight on success
+            await disableFlashlight();
+            
             setFinalOcrResults(finalResult);
             setCurrentPhase("back-complete");
             setAttemptCount(0);
             setCurrentOperation("");
             
-            // Show success message for 3 seconds before showing results
+            // Show success message for 1 second before showing results
             setTimeout(() => {
               setCurrentPhase("results");
-            }, 1000);
+            }, 100);
           } else {
+            // 🛡️ Double check - if success was already received, don't process failure
+            if (backSuccessReceivedRef.current) {
+              console.log("🛡️ Back success already received, ignoring failure path");
+              return;
+            }
             console.log(
               "⚠️ Scan result didn't meet success criteria"
             );
@@ -941,9 +1158,24 @@ const CardDetectionApp = () => {
           }
         }
       } catch (error) {
+        // 🛡️ CRITICAL: If success was already received, ignore any errors
+        if (backSuccessReceivedRef.current) {
+          console.log("🛡️ Back success already received, ignoring error:", error.message);
+          return;
+        }
+        
         console.error("Back side detection failed:", error);
         setDetectionActive(false);
         if (!stopRequestedRef.current) {
+          // Check for fake card detection error
+          if (error.message && error.message.includes('Unacceptable Card Detection')) {
+            console.log("🚫 Unacceptable card detected on back side - stopping scan");
+            setErrorMessage('Sorry, we do not accept screen detection cards - make sure you physically have the bank card for security scanning.');
+            setCurrentPhase('fake-card-error');
+            setFakeCardDetectedPhase('back');
+            return;
+          }
+          
           // For validation failures, handleDetectionFailure is already called in UseDetection
           // but we still need to handle other types of errors
           if (error.message === "Back validation failed") {
@@ -964,6 +1196,7 @@ const CardDetectionApp = () => {
 
   const resetApplication = () => {
     stopRequestedRef.current = true;
+    backSuccessReceivedRef.current = false; // Reset back success flag
     clearDetectionTimeout();
 
     setCurrentPhase("idle");
@@ -973,6 +1206,8 @@ const CardDetectionApp = () => {
     setCountdown(0);
     setErrorMessage("");
     setSessionId("");
+    setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1013,6 +1248,7 @@ const CardDetectionApp = () => {
     
     // CRITICAL: Stop all detection immediately
     stopRequestedRef.current = true;
+    backSuccessReceivedRef.current = false; // Reset back success flag
     clearDetectionTimeout();
 
     // Clean up intervals FIRST
@@ -1030,6 +1266,8 @@ const CardDetectionApp = () => {
     setIsProcessing(false);
     setCountdown(0);
     setErrorMessage("");
+    setCapturedImage(null); // Clear captured image
+    setShowCaptureSuccessMessage(false); // Clear success message
     
     // Reset prompt text state
     setShowPromptText(false);
@@ -1101,6 +1339,45 @@ const CardDetectionApp = () => {
     stopRequestedRef.current = false;
   };
 
+  const handleFakeCardRetry = () => {
+    console.log("🔄 Fake card retry - Restarting from phase:", fakeCardDetectedPhase);
+    
+    // Increment attempt count
+    const newAttemptCount = attemptCount + 1;
+    setAttemptCount(newAttemptCount);
+    console.log(`🔢 Fake card retry attempt count: ${newAttemptCount}/${MAX_ATTEMPTS}`);
+    
+    // Check if max attempts reached
+    if (newAttemptCount >= MAX_ATTEMPTS) {
+      setMaxAttemptsReached(true);
+      setErrorMessage("Maximum attempts reached. Please contact support for assistance.");
+      setCurrentPhase("max-attempts-reached");
+      setFakeCardDetectedPhase(null);
+      return;
+    }
+    
+    // Clear error state
+    setErrorMessage("");
+    stopRequestedRef.current = false;
+    
+    // Restart from the appropriate phase
+    if (fakeCardDetectedPhase === 'front') {
+      console.log("🔄 Restarting from front side scan");
+      setCurrentPhase("idle");
+      setFakeCardDetectedPhase(null);
+      // Don't reset session - use same session for tracking
+    } else if (fakeCardDetectedPhase === 'back') {
+      console.log("🔄 Restarting from back side scan");
+      setCurrentPhase("ready-for-back");
+      setFakeCardDetectedPhase(null);
+      // Keep the same session since front was successful
+    } else {
+      // Fallback to idle
+      setCurrentPhase("idle");
+      setFakeCardDetectedPhase(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-700 to-black p-4 sm:p-4">
       <div className="container mx-auto max-w-4xl">
@@ -1108,8 +1385,8 @@ const CardDetectionApp = () => {
         <div className="flex items-center justify-center bg-white p-2 sm:p-4 rounded-md mb-4 sm:mb-8 shadow">
           {merchantLogo && (
             <img
-              // width={50}
-              // height={50}
+              width={50}
+              height={50}
               src={merchantLogo}
               alt="Merchant Logo"
               className=" h-15 w-15 object-contain mr-3"
@@ -1117,12 +1394,13 @@ const CardDetectionApp = () => {
           )}
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
             {merchantName || "Card Security Scan"}
+
           </h1>
         </div>
 
         {/* Camera Permission Alert Dialog */}
         {showPermissionAlert && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/80 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
               <div className="text-center">
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1177,6 +1455,8 @@ const CardDetectionApp = () => {
           isProcessing={isProcessing}
           showPromptText={showPromptText}
           promptText={promptText}
+          capturedImage={capturedImage}
+          showCaptureSuccessMessage={showCaptureSuccessMessage}
         />
 
         <ControlPanel
@@ -1188,6 +1468,8 @@ const CardDetectionApp = () => {
           onReset={resetApplication}
           onTryAgain={handleTryAgain}
           onStartOver={handleStartOver}
+          onFakeCardRetry={handleFakeCardRetry}
+          fakeCardDetectedPhase={fakeCardDetectedPhase}
           frontScanState={frontScanState}
           countdown={countdown}
           errorMessage={errorMessage}
@@ -1197,6 +1479,7 @@ const CardDetectionApp = () => {
           attemptCount={attemptCount}
           maxAttempts={MAX_ATTEMPTS}
           maxAttemptsReached={maxAttemptsReached}
+          showCaptureSuccessMessage={showCaptureSuccessMessage}
         />
 
         <StatusInformation
