@@ -1668,13 +1668,14 @@ const CardDetectionApp = () => {
         const data = await response.json();
         console.log("✅ Voice registration status:", data);
         
-        // If status is true, user is already registered → use verify mode
-        // If status is false, user needs to register → use register mode
-        if (data.status === true) {
+        // Check if user is already registered
+        // API returns { success: true, data: { status: "active" } } if user exists
+        // API returns { success: false, ... } if user doesn't exist
+        if (data.success && data.data && data.data.status === "active") {
           console.log("✅ User already registered - switching to VERIFY mode");
           setVoiceVerificationMode("verify");
         } else {
-          console.log("📝 User not registered - switching to REGISTER mode");
+          console.log("📝 User not registered or status unclear - switching to REGISTER mode");
           setVoiceVerificationMode("register");
         }
       } else {
