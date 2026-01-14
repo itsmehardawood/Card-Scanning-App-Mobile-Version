@@ -495,13 +495,17 @@ const VoiceVerification = ({
         
         logToAndroid(`✅ Voice ${mode} successful`, result);
         
-        // Call success callback
+        // Call success callback - parent will handle closing and cleanup
         if (onSuccess) {
           onSuccess(result);
         }
         
-        // Close popup
-        onClose();
+        // ❌ DO NOT call onClose() here - let parent handle it after processing
+        // The parent's onSuccess handler will:
+        // 1. Mark result as verified
+        // 2. Retrieve encrypted data
+        // 3. Close the popup via setShowVoiceVerification(false)
+        // onClose();
       } else {
         logToAndroid(`❌ Voice ${mode} failed`, { 
           status: response.status,
