@@ -20,7 +20,6 @@ import {
 import { sendFrameToAPI, reportFailure } from "./utils/apiService";
 import { useDetection } from "./hooks/UseDetection";
 import Image from "next/image";
-import { initializeBridgeInterceptor, markVoicePending, releasePendingBridgeMessage } from "./utils/bridgeInterceptor";
 
 // Constants for attempt limits and timeouts
 const MAX_ATTEMPTS = 5;
@@ -212,8 +211,6 @@ const CardDetectionApp = () => {
     logPhase(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
     
     if (currentPhase === "awaiting-voice-verification") {
-      // Mark voice pending so bridge interceptor buffers scan-complete payloads
-      try { markVoicePending(true); } catch {}
       logPhase("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
       
       // 🔒 CRITICAL: FORCE STOP CAMERA BEFORE VOICE VERIFICATION
@@ -277,9 +274,6 @@ const CardDetectionApp = () => {
 
   // Initialize window.scanStatus for Android polling
   useEffect(() => {
-    // Install native bridge interceptor early (idempotent)
-    try { initializeBridgeInterceptor(); } catch {}
-
     // Set initial incomplete status
     window.scanStatus = {
       complete_scan: false,
@@ -1810,13 +1804,7 @@ const CardDetectionApp = () => {
           has_encrypted_data: !!finalData.encrypted_data
         });
 
-        // ✅ Release any buffered native bridge message now that voice is verified
-        try {
-          const released = releasePendingBridgeMessage();
-          logToServer("🔓 Released buffered native message to Android/iOS", { released });
-        } catch (e) {
-          logToServer("⚠️ Failed to release buffered native message", { error: e?.message });
-        }
+        // Android/iOS will proceed via their existing flow
 
         // Cleanup
         setSecureResultId(null);
