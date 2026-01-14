@@ -1690,6 +1690,19 @@ const CardDetectionApp = () => {
   };
 
   const handleVoiceVerificationSuccess = async (result) => {
+    // 🚨 FIRST LOG - Confirm function is called
+    fetch('/securityscan/api/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        component: "handleVoiceVerificationSuccess",
+        message: "🚨 FUNCTION ENTRY - handleVoiceVerificationSuccess called",
+        timestamp: new Date().toISOString(),
+        result_received: !!result,
+        secureResultId_exists: !!secureResultId
+      })
+    }).catch(() => {});
+    
     // Helper to log to server for Android debugging
     const logToServer = (message, data = {}) => {
       console.log(message, data);
