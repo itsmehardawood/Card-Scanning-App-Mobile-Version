@@ -1825,8 +1825,9 @@ const CardDetectionApp = () => {
         setSecureResultId(null);
         setShowVoiceVerification(false);
         
-        // Restart camera after successful voice verification
-        await restartCameraAfterVoice();
+        // ❌ DO NOT restart camera after successful verification
+        // The scan is complete, user is on results screen
+        // Camera should stay off - Android will handle cleanup from here
         
       } else if (finalData.status === "pending_voice_verification") {
         logToServer("❌ Step 2 FAILED - Verification not recorded on server", { status: finalData.status });
