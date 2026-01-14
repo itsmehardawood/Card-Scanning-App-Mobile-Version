@@ -1778,8 +1778,10 @@ const CardDetectionApp = () => {
         dataKeys: Object.keys(finalData)
       });
 
-      if (finalData.success && finalData.status === "verified") {
-        logToServer("🔓 Step 2 SUCCESS - Encrypted data released after voice verification");
+      if (finalData.success && (finalData.status === "verified" || finalData.status === "success")) {
+        logToServer("🔓 Step 2 SUCCESS - Encrypted data released after voice verification", {
+          status: finalData.status
+        });
         
         // NOW expose to React state
         setFinalOcrResults(finalData);
@@ -1822,9 +1824,9 @@ const CardDetectionApp = () => {
         logToServer("❌ Step 2 FAILED - Unexpected response status", { 
           status: finalData.status,
           success: finalData.success,
-          expected: "verified"
+          expected_statuses: ["verified", "success"]
         });
-        throw new Error(`Unexpected status: ${finalData.status}`);
+        throw new Error(`Unexpected status: ${finalData.status}. Expected 'verified' or 'success'`);
       }
       
     } catch (error) {
