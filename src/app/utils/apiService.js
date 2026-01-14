@@ -24,7 +24,7 @@ export const sendFrameToAPI = async (
   // const apiUrl = `https://testscan.cardnest.io/detect/${merchantId}`;
 
   // prod server
-  const apiUrl = `https://api.cardnest.io/detect/${merchantId}`;
+  const apiUrl = `https://testscan.cardnest.io/detect/${merchantId}`;
 
   const file = new File([frameBlob], `${phase}_frame_${frameNumber}.jpg`, {
     type: "image/jpeg",
@@ -91,7 +91,7 @@ export const reportFailure = async (
       return;
     }
 
-    const apiUrl = `https://api.cardnest.io/report_failure`;
+    const apiUrl = `https://testscan.cardnest.io/report_failure`;
 
     const payload = {
       scan_id: scanId || "",
