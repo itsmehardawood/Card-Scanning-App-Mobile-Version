@@ -1690,19 +1690,38 @@ const CardDetectionApp = () => {
   };
 
   const handleVoiceVerificationSuccess = async (result) => {
-    console.log("✅ Voice verification completed successfully:", result);
+    // Helper to log to server for Android debugging
+    const logToServer = (message, data = {}) => {
+      console.log(message, data);
+      fetch('/securityscan/api/client-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          component: "handleVoiceVerificationSuccess",
+          message,
+          timestamp: new Date().toISOString(),
+          ...data
+        })
+      }).catch(err => console.error('Failed to log:', err));
+    };
+    
+    logToServer("✅ Voice verification completed successfully", { 
+      result_keys: Object.keys(result),
+      has_verification_id: !!(result.verification_id || result.id)
+    });
     
     if (!secureResultId) {
-      console.error("❌ No secure result ID found");
+      logToServer("❌ No secure result ID found - CRITICAL ERROR");
       setErrorMessage("Verification succeeded but scan reference was lost.");
       setCurrentPhase("error");
       return;
     }
 
     try {
-      console.log("📤 Step 1: Marking result as voice-verified on server...");
-      console.log(`   └─ Result ID: ${secureResultId}`);
-      console.log(`   └─ Verification ID: ${result.verification_id || result.id || `voice_${Date.now()}`}`);
+      logToServer("📤 Step 1: Marking result as voice-verified on server", {
+        resultId: secureResultId,
+        verificationId: result.verification_id || result.id || `voice_${Date.now()}`
+      });
       
       // Step 1: Mark result as voice-verified on server
       const verifyResponse = await fetch('/securityscan/api/secure-results', {
@@ -1715,16 +1734,22 @@ const CardDetectionApp = () => {
       });
 
       const verifyData = await verifyResponse.json();
-      console.log("📥 Step 1 Response:", verifyData);
+      logToServer("📥 Step 1 Response received", { 
+        success: verifyData.success,
+        error: verifyData.error,
+        status: verifyResponse.status
+      });
 
       if (!verifyData.success) {
+        logToServer("❌ Step 1 FAILED - Server rejected verification", { error: verifyData.error });
         throw new Error(verifyData.error || 'Failed to verify result');
       }
 
-      console.log("✅ Server confirmed voice verification");
+      logToServer("✅ Step 1 SUCCESS - Server confirmed voice verification");
 
-      console.log("📤 Step 2: Retrieving verified data from server...");
-      console.log(`   └─ Result ID: ${secureResultId}`);
+      logToServer("📤 Step 2: Retrieving verified data from server", {
+        resultId: secureResultId
+      });
       
       // Step 2: Retrieve verified data from server
       const dataResponse = await fetch(
@@ -1732,15 +1757,16 @@ const CardDetectionApp = () => {
       );
       
       const finalData = await dataResponse.json();
-      console.log("📥 Step 2 Response:", {
+      logToServer("📥 Step 2 Response received", {
         success: finalData.success,
         status: finalData.status,
         hasEncryptedData: !!finalData.encrypted_data,
+        error: finalData.error,
         dataKeys: Object.keys(finalData)
       });
 
       if (finalData.success && finalData.status === "verified") {
-        console.log("🔓 Encrypted data released after voice verification");
+        logToServer("🔓 Step 2 SUCCESS - Encrypted data released after voice verification");
         
         // NOW expose to React state
         setFinalOcrResults(finalData);
@@ -1757,10 +1783,11 @@ const CardDetectionApp = () => {
           ...finalData
         };
 
-        console.log("✅ Android can now access: window.scanStatus");
-        console.log("   └─ complete_scan: true");
-        console.log("   └─ encrypted_data: [PRESENT]");
-        console.log("   └─ voice_verified: true");
+        logToServer("✅ COMPLETE SUCCESS - Android can now access window.scanStatus", {
+          complete_scan: true,
+          voice_verified: true,
+          has_encrypted_data: !!finalData.encrypted_data
+        });
 
         // Cleanup
         setSecureResultId(null);
@@ -1770,21 +1797,29 @@ const CardDetectionApp = () => {
         await restartCameraAfterVoice();
         
       } else if (finalData.status === "pending_voice_verification") {
-        console.error("❌ Server says verification not recorded");
+        logToServer("❌ Step 2 FAILED - Verification not recorded on server", { status: finalData.status });
         throw new Error("Verification not recorded on server");
       } else if (!finalData.success) {
-        console.error("❌ Server returned error:", finalData.error);
+        logToServer("❌ Step 2 FAILED - Server returned error", { 
+          error: finalData.error,
+          success: finalData.success 
+        });
         throw new Error(finalData.error || 'Failed to retrieve scan data');
       } else {
-        console.error("❌ Unexpected response status:", finalData.status);
+        logToServer("❌ Step 2 FAILED - Unexpected response status", { 
+          status: finalData.status,
+          success: finalData.success,
+          expected: "verified"
+        });
         throw new Error(`Unexpected status: ${finalData.status}`);
       }
       
     } catch (error) {
-      console.error("❌ Error after voice verification:", error);
-      console.error("   └─ Error name:", error.name);
-      console.error("   └─ Error message:", error.message);
-      console.error("   └─ Stack:", error.stack);
+      logToServer("❌ EXCEPTION CAUGHT in handleVoiceVerificationSuccess", {
+        error_name: error.name,
+        error_message: error.message,
+        error_stack: error.stack
+      });
       setErrorMessage(`Verification failed: ${error.message}`);
       setCurrentPhase("error");
     }
