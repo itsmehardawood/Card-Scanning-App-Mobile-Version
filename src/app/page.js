@@ -1770,13 +1770,12 @@ const CardDetectionApp = () => {
       );
       
       const finalData = await dataResponse.json();
-      logToServer("📥 Step 2 Response received - DETAILED", {
-        success: finalData.success,
-        status: finalData.status,
+      
+      // Log response status explicitly
+      logToServer(`📥 Step 2 Response - status: "${finalData.status}" | success: ${finalData.success} | error: ${finalData.error || "none"}`);
+      logToServer("📥 Step 2 Response keys", {
         hasEncryptedData: !!finalData.encrypted_data,
-        error: finalData.error,
-        dataKeys: Object.keys(finalData),
-        full_response: JSON.stringify(finalData).substring(0, 500) // First 500 chars
+        dataKeys: Object.keys(finalData)
       });
 
       if (finalData.success && finalData.status === "verified") {
