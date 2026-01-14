@@ -320,22 +320,83 @@ const VoiceVerification = ({
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      logToAndroid("Stopping recording");
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+    try {
+      const recorder = mediaRecorderRef.current;
       
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
+      logToAndroid("Stop recording requested", {
+        recorderExists: !!recorder,
+        recorderState: recorder?.state
+      });
+      
+      if (!recorder) {
+        logToAndroid("⚠️ No mediaRecorder found");
+        setIsRecording(false);
+        return;
       }
+      
+      // Check if actually recording
+      if (recorder.state === "recording") {
+        logToAndroid("Stopping recording - recorder is active");
+        
+        // CRITICAL: Stop the recorder
+        recorder.stop();
+        
+        // Immediately update UI state
+        setIsRecording(false);
+        
+        // Clear the timer
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        
+        // Stop all audio tracks immediately
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => {
+            track.stop();
+            logToAndroid("Audio track stopped", { label: track.label });
+          });
+          streamRef.current = null;
+        }
+        
+        logToAndroid("✅ Recording stopped successfully");
+      } else if (recorder.state === "inactive") {
+        logToAndroid("⚠️ Recorder is already inactive, just updating UI");
+        setIsRecording(false);
+        
+        // Still ensure streams are stopped
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => {
+            track.stop();
+            logToAndroid("Audio track stopped (cleanup)", { label: track.label });
+          });
+          streamRef.current = null;
+        }
+      } else {
+        logToAndroid("⚠️ Unexpected recorder state", { state: recorder.state });
+        setIsRecording(false);
+      }
+    } catch (err) {
+      logToAndroid("❌ Error stopping recording", { error: err.message });
+      setIsRecording(false); // Force UI update even on error
     }
   };
 
   const handleRecordClick = () => {
+    logToAndroid("Record button clicked", { 
+      currentState: isRecording ? "recording" : "not recording",
+      hasAudio: !!audioBlob
+    });
+    
     if (isRecording) {
       stopRecording();
     } else {
+      // Only start new recording if the previous one is fully complete
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        logToAndroid("⚠️ Recorder still in recording state, forcing stop first");
+        mediaRecorderRef.current.stop();
+      }
+      
       setRetryAttempt(0); // Reset retry count on new recording attempt
       setIsRetrying(false);
       startRecording(0); // Start with retry count 0
