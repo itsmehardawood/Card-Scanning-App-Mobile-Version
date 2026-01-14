@@ -1695,10 +1695,15 @@ const CardDetectionApp = () => {
     if (!secureResultId) {
       console.error("❌ No secure result ID found");
       setErrorMessage("Verification succeeded but scan reference was lost.");
+      setCurrentPhase("error");
       return;
     }
 
     try {
+      console.log("📤 Step 1: Marking result as voice-verified on server...");
+      console.log(`   └─ Result ID: ${secureResultId}`);
+      console.log(`   └─ Verification ID: ${result.verification_id || result.id || `voice_${Date.now()}`}`);
+      
       // Step 1: Mark result as voice-verified on server
       const verifyResponse = await fetch('/securityscan/api/secure-results', {
         method: 'PUT',
@@ -1710,6 +1715,7 @@ const CardDetectionApp = () => {
       });
 
       const verifyData = await verifyResponse.json();
+      console.log("📥 Step 1 Response:", verifyData);
 
       if (!verifyData.success) {
         throw new Error(verifyData.error || 'Failed to verify result');
@@ -1717,12 +1723,21 @@ const CardDetectionApp = () => {
 
       console.log("✅ Server confirmed voice verification");
 
+      console.log("📤 Step 2: Retrieving verified data from server...");
+      console.log(`   └─ Result ID: ${secureResultId}`);
+      
       // Step 2: Retrieve verified data from server
       const dataResponse = await fetch(
         `/securityscan/api/secure-results?resultId=${secureResultId}`
       );
       
       const finalData = await dataResponse.json();
+      console.log("📥 Step 2 Response:", {
+        success: finalData.success,
+        status: finalData.status,
+        hasEncryptedData: !!finalData.encrypted_data,
+        dataKeys: Object.keys(finalData)
+      });
 
       if (finalData.success && finalData.status === "verified") {
         console.log("🔓 Encrypted data released after voice verification");
@@ -1755,13 +1770,21 @@ const CardDetectionApp = () => {
         await restartCameraAfterVoice();
         
       } else if (finalData.status === "pending_voice_verification") {
+        console.error("❌ Server says verification not recorded");
         throw new Error("Verification not recorded on server");
-      } else {
+      } else if (!finalData.success) {
+        console.error("❌ Server returned error:", finalData.error);
         throw new Error(finalData.error || 'Failed to retrieve scan data');
+      } else {
+        console.error("❌ Unexpected response status:", finalData.status);
+        throw new Error(`Unexpected status: ${finalData.status}`);
       }
       
     } catch (error) {
       console.error("❌ Error after voice verification:", error);
+      console.error("   └─ Error name:", error.name);
+      console.error("   └─ Error message:", error.message);
+      console.error("   └─ Stack:", error.stack);
       setErrorMessage(`Verification failed: ${error.message}`);
       setCurrentPhase("error");
     }

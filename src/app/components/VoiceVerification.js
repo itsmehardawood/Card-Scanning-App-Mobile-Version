@@ -15,6 +15,7 @@ const VoiceVerification = ({
   const [hasRecorded, setHasRecorded] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
   const [recordingTime, setRecordingTime] = useState(0);
   const [debugInfo, setDebugInfo] = useState("");
@@ -495,17 +496,23 @@ const VoiceVerification = ({
         
         logToAndroid(`✅ Voice ${mode} successful`, result);
         
-        // Call success callback - parent will handle closing and cleanup
-        if (onSuccess) {
-          onSuccess(result);
-        }
+        // Show success message to user
+        setShowSuccess(true);
+        setIsSubmitting(false);
         
-        // ❌ DO NOT call onClose() here - let parent handle it after processing
-        // The parent's onSuccess handler will:
-        // 1. Mark result as verified
-        // 2. Retrieve encrypted data
-        // 3. Close the popup via setShowVoiceVerification(false)
-        // onClose();
+        // Wait 1.5 seconds to show success message, then call parent callback
+        setTimeout(() => {
+          // Call success callback - parent will handle closing and cleanup
+          if (onSuccess) {
+            onSuccess(result);
+          }
+          
+          // ❌ DO NOT call onClose() here - let parent handle it after processing
+          // The parent's onSuccess handler will:
+          // 1. Mark result as verified
+          // 2. Retrieve encrypted data
+          // 3. Close the popup via setShowVoiceVerification(false)
+        }, 1500);
       } else {
         logToAndroid(`❌ Voice ${mode} failed`, { 
           status: response.status,
@@ -536,6 +543,29 @@ const VoiceVerification = ({
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        {/* Success Message - Full Screen Takeover */}
+        {showSuccess && (
+          <div className="absolute inset-0 bg-white rounded-lg flex flex-col items-center justify-center z-10">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <span className="text-green-600 text-4xl">✓</span>
+              </div>
+              <h3 className="text-2xl font-bold text-green-600 mb-2">
+                {mode === "verify" ? "Verification Successful!" : "Registration Successful!"}
+              </h3>
+              <p className="text-gray-600 text-sm">
+                {mode === "verify" 
+                  ? "Your identity has been verified. Loading your results..."
+                  : "Your voice has been registered. Processing your card scan..."
+                }
+              </p>
+              <div className="mt-4">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="text-center mb-6">
           {/* Error Message */}
