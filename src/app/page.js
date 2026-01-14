@@ -1804,6 +1804,23 @@ const CardDetectionApp = () => {
           has_encrypted_data: !!finalData.encrypted_data
         });
 
+        // 🚀 ANDROID COMPATIBILITY: Make a fetch request to trigger Android's fetch interceptor
+        // Android is listening for fetch responses to "api.cardnest.io/detect"
+        // This ensures Android code doesn't need any changes
+        logToServer("📡 Triggering Android fetch interceptor with scan complete response");
+        
+        // Fire and forget - don't block on this
+        fetch('https://api.cardnest.io/detect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(window.scanStatus)
+        }).then(resp => {
+          logToServer("📡 Android fetch interceptor triggered successfully");
+        }).catch(err => {
+          logToServer("⚠️ Android fetch trigger failed (non-critical)", { error: err.message });
+          // This is non-critical - window.scanStatus is already set
+        });
+
         // Cleanup
         setSecureResultId(null);
         setShowVoiceVerification(false);
