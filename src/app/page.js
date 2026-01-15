@@ -1827,7 +1827,7 @@ const CardDetectionApp = () => {
 
           // Call local endpoint (iOS/Android will intercept ANY fetch, so this works too)
           // The key is that iOS sees a fetch happening and intercepts the response
-          fetch('/api/scan-complete', {
+          fetch('/securityscan/api/scan-complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(intercepPayload)
@@ -1836,7 +1836,7 @@ const CardDetectionApp = () => {
               status: response.status,
               complete_scan: true,
               has_encrypted_data: !!finalData.encrypted_data,
-              endpoint: "/api/scan-complete"
+              endpoint: "/securityscan/api/scan-complete"
             });
           }).catch(error => {
             logToServer("⚠️ Fetch intercept attempt failed (non-critical)", {
