@@ -283,16 +283,6 @@ export const captureAndSendFramesFront = async (
           try {
             const apiResponse = await sendFrameToAPI(frame, phase, currentSessionId, frameNumber);
             
-            // 🔒 CRITICAL: Strip sensitive data before Android's fetch interceptor sees it
-            const sanitizedResponse = { ...apiResponse };
-            delete sanitizedResponse.encrypted_data;
-            delete sanitizedResponse.encrypted_card_data;
-            
-            if (apiResponse.encrypted_data) {
-              console.log("🔒 [SECURITY] Stripped encrypted_data from front-side response before Android intercepts");
-              console.log(`   └─ Original had: encrypted_data (${apiResponse.encrypted_data.length} chars)`);
-            }
-            
             // 🎯 HIGHEST PRIORITY: Check for status success OR already_completed
             if (apiResponse.status === "success" || apiResponse.status === "already_completed") {
               console.log('🎯 SUCCESS/ALREADY_COMPLETED STATUS received! Stopping detection...');
@@ -301,8 +291,7 @@ export const captureAndSendFramesFront = async (
               isComplete = true;
               cleanup();
               setCurrentPhase('results');
-              // ✅ Return sanitized version
-              resolve({ ...sanitizedResponse, capturedImage: capturedImageDataUrl });
+              resolve({ ...apiResponse, capturedImage: capturedImageDataUrl });
               return;
             }
             
@@ -313,8 +302,7 @@ export const captureAndSendFramesFront = async (
               isComplete = true;
               cleanup();
               setCurrentPhase('results');
-              // ✅ Return sanitized version
-              resolve(sanitizedResponse);
+              resolve(apiResponse);
               return;
             }
             

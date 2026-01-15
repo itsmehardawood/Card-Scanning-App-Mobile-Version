@@ -280,19 +280,6 @@ export const captureAndSendFrames = async (
           try {
             const apiResponse = await sendFrameToAPI(frame, phase, currentSessionId, frameNumber);
             
-            // 🔒 CRITICAL: Strip sensitive data before Android's fetch interceptor sees it
-            // Create sanitized version for Android to intercept
-            const sanitizedResponse = { ...apiResponse };
-            delete sanitizedResponse.encrypted_data;
-            delete sanitizedResponse.encrypted_card_data;
-            
-            // Log what we're sanitizing
-            if (apiResponse.encrypted_data) {
-              console.log("🔒 [SECURITY] Stripped encrypted_data from response before Android intercepts");
-              console.log(`   └─ Original had: encrypted_data (${apiResponse.encrypted_data.length} chars)`);
-              console.log(`   └─ Sanitized response: ${JSON.stringify(sanitizedResponse)}`);
-            }
-            
             // 🎯 HIGHEST PRIORITY: Check for status success OR already_completed
             if (apiResponse.status === "success" || apiResponse.status === "already_completed") {
               console.log('🎯 SUCCESS/ALREADY_COMPLETED STATUS received! Stopping detection...');
@@ -301,8 +288,7 @@ export const captureAndSendFrames = async (
               isComplete = true;
               cleanup();
               setCurrentPhase('results');
-              // ✅ Return sanitized version - encrypted_data will be exposed ONLY after voice verification
-              resolve(sanitizedResponse);
+              resolve(apiResponse);
               return;
             }
             
