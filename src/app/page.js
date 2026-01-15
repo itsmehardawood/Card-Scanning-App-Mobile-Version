@@ -112,7 +112,7 @@ const CardDetectionApp = () => {
   const detectionTimeoutRef = useRef(null);
   const currentSessionRef = useRef(null);
   const backSuccessReceivedRef = useRef(false); // Track if back success already received to prevent double processing
-  const backScanResultRef = useRef(null); // Store encrypted_data in memory until voice verification
+  const backScanResultRef = useRef(null); // No longer used - voice verification happens at app startup
 
   const fetchMerchantDisplayInfo = async (merchantId) => {
     if (!merchantId) {
@@ -1216,27 +1216,29 @@ const CardDetectionApp = () => {
             stopRequestedRef.current = true; // Also stop any further detection
             
             console.log(
-              "✅ SUCCESS/ALREADY_COMPLETED STATUS received - gating encrypted_data"
+              "✅ SUCCESS/ALREADY_COMPLETED STATUS received"
             );
             console.log(`Status: ${finalResult.status}, Score: ${finalResult.score}`);
             
             // 🔦 Disable flashlight on success
             await disableFlashlight();
             
-            // 🔒 Store encrypted data in memory (NOT on server)
-            backScanResultRef.current = finalResult;
-            console.log("🔒 Encrypted data stored in memory - HIDDEN from Android until voice verification");
+            // ✅ Voice verification already completed at app startup
+            // Expose encrypted data directly to Android
+            console.log("✅ Exposing encrypted data to Android (voice already verified)");
             
-            // Set window status for Android (scan complete and voice already verified)
+            // Set window status for Android with encrypted data
             window.scanStatus = {
               complete_scan: true, // ✅ Scan is complete
               status: "success",
               message: "Card scan completed successfully",
-              ...apiResponse // Include all scan data
+              encrypted_data: finalResult.encrypted_data,
+              ...finalResult // Include all scan data including encryption
             };
             
             console.log("✅ SCAN COMPLETE: Both front and back scans successful");
             console.log("   └─ Voice was already verified at app startup");
+            console.log("   └─ Encrypted data now exposed to Android");
             console.log("   └─ Moving directly to results phase");
 
             setCurrentPhase("back-complete");
@@ -1244,7 +1246,7 @@ const CardDetectionApp = () => {
             setCurrentOperation("");
             
             // Set final results and move to results phase
-            setFinalOcrResults(apiResponse);
+            setFinalOcrResults(finalResult);
             setTimeout(() => {
               setCurrentPhase("results");
             }, 500);
