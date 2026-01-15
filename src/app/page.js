@@ -1804,6 +1804,49 @@ const CardDetectionApp = () => {
           has_encrypted_data: !!finalData.encrypted_data
         });
 
+        // 🔓 CRITICAL: Trigger a new fetch so iOS/Android intercepts it
+        // (They intercepted the original Python API response, but we blocked it via window.scanStatus)
+        // Now we re-trigger the same endpoint with complete data so they intercept it again
+        logToServer("📡 Triggering fetch intercept for iOS/Android to receive final data", {
+          endpoint: "api.cardnest.io/detect",
+          reason: "Re-trigger intercept after voice verification"
+        });
+
+        try {
+          // Create payload matching original Python API response format
+          const intercepPayload = {
+            status: "success",
+            complete_scan: true,
+            encrypted_data: finalData.encrypted_data,
+            voice_verified: true,
+            scan_id: sessionId,
+            score: finalData.score,
+            ...finalData
+          };
+
+          // Call the same endpoint so iOS/Android fetch interceptor catches it
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/detect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(intercepPayload)
+          }).then(response => {
+            logToServer("📡 Fetch intercept triggered successfully", {
+              status: response.status,
+              complete_scan: true,
+              has_encrypted_data: !!finalData.encrypted_data
+            });
+          }).catch(error => {
+            logToServer("⚠️ Fetch intercept attempt failed (non-critical)", {
+              error: error.message,
+              note: "iOS/Android may still have data from window.scanStatus"
+            });
+          });
+        } catch (interceptError) {
+          logToServer("⚠️ Error triggering fetch intercept", {
+            error: interceptError.message
+          });
+        }
+
         // Android/iOS will proceed via their existing flow
 
         // Cleanup
