@@ -1227,31 +1227,27 @@ const CardDetectionApp = () => {
             backScanResultRef.current = finalResult;
             console.log("🔒 Encrypted data stored in memory - HIDDEN from Android until voice verification");
             
-            // Set window status for Android (incomplete until voice verification)
+            // Set window status for Android (scan complete and voice already verified)
             window.scanStatus = {
-              complete_scan: false, // ❌ Android will NOT process
-              status: "pending_voice_verification",
-              message: "Awaiting voice verification"
+              complete_scan: true, // ✅ Scan is complete
+              status: "success",
+              message: "Card scan completed successfully",
+              ...apiResponse // Include all scan data
             };
             
-            console.log("🚫 CURRENTLY: Android sees complete_scan = false");
-            console.log("   └─ Reason: Waiting for voice verification");
-            console.log("   └─ After voice verification: complete_scan will be TRUE");
-            console.log("   └─ Encrypted data will be available in window.scanStatus");
-            
+            console.log("✅ SCAN COMPLETE: Both front and back scans successful");
+            console.log("   └─ Voice was already verified at app startup");
+            console.log("   └─ Moving directly to results phase");
+
             setCurrentPhase("back-complete");
             setAttemptCount(0);
             setCurrentOperation("");
             
-            // ⚠️ DO NOT set finalOcrResults here - data stays in backScanResultRef
-            // ⚠️ DO NOT expose encrypted_data to window object until voice verification
-            
-            // Check voice registration status before showing verification
-            setTimeout(async () => {
-              await checkVoiceRegistrationStatus();
-              setCurrentPhase("awaiting-voice-verification");
-              // Don't show voice verification here - it will be shown after camera stops
-            }, 100);
+            // Set final results and move to results phase
+            setFinalOcrResults(apiResponse);
+            setTimeout(() => {
+              setCurrentPhase("results");
+            }, 500);
           } else {
             // 🛡️ Double check - if success was already received, don't process failure
             if (backSuccessReceivedRef.current) {
