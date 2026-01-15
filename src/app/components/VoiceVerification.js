@@ -7,9 +7,7 @@ const VoiceVerification = ({
   phoneNumber, 
   merchantId,
   onSuccess,
-  mode = "register", // "register" or "verify"
-  onCameraStop = null, // Callback to stop camera before mic access
-  onCameraRestart = null // Callback to restart camera after recording
+  mode = "register" // "register" or "verify"
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecorded, setHasRecorded] = useState(false);
@@ -63,15 +61,12 @@ const VoiceVerification = ({
         mediaDevices: !!navigator.mediaDevices,
         getUserMedia: !!navigator.mediaDevices?.getUserMedia,
         phoneNumber: phoneNumber ? "present" : "missing",
-
         merchantId: merchantId || "missing"
       };
       
-      logToAndroid("Voice Verification opened", diagnosticInfo);
+      logToAndroid("Voice Verification opened at initial stage", diagnosticInfo);
       setDebugInfo(`WebView: ${isWebView()} | Mode: ${mode}`);
-      
-      // Camera should already be stopped by page.js before this component opens
-      logToAndroid("✅ Voice Verification ready - camera should already be stopped by parent");
+      logToAndroid("✅ Voice Verification ready - camera not yet initialized");
     }
   }, [isOpen, mode]);
 
@@ -113,23 +108,6 @@ const VoiceVerification = ({
             logToAndroid("Permission check not supported or failed", { error: permError.message });
             // Continue - some browsers don't support permissions API
           }
-        }
-      }
-      
-      // CRITICAL: Stop camera on EVERY attempt to ensure resources are freed
-      // Android WebView may not release camera resources immediately
-      if (onCameraStop) {
-        logToAndroid("Stopping camera to free resources for microphone", { attempt: currentRetry });
-        try {
-          await onCameraStop();
-          // Longer delay for Android WebView - increases with each retry
-          const waitTime = 1000 + (currentRetry * 500); // 1s, 1.5s, 2s, 2.5s
-          logToAndroid(`Waiting ${waitTime}ms for camera resources to release`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          logToAndroid("Camera stopped successfully");
-        } catch (stopError) {
-          logToAndroid("Error stopping camera", { error: stopError.message });
-          // Continue anyway - try to get mic access
         }
       }
       

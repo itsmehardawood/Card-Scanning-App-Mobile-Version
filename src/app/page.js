@@ -92,8 +92,8 @@ const CardDetectionApp = () => {
   // Voice verification state
   const [showVoiceVerification, setShowVoiceVerification] = useState(false);
   const [voiceVerificationMode, setVoiceVerificationMode] = useState("register"); // "register" or "verify"
-  const [isCameraPaused, setIsCameraPaused] = useState(false);
-  const [cameraHidden, setCameraHidden] = useState(false); // Hide camera during voice verification
+  const [voiceVerificationComplete, setVoiceVerificationComplete] = useState(false); // Track if voice verification is done
+  const [voiceVerificationLoading, setVoiceVerificationLoading] = useState(false); // Show loading while checking registration status
 
   const [merchantInfo, setMerchantInfo] = useState({
     display_name: "",
@@ -195,86 +195,11 @@ const CardDetectionApp = () => {
     }
   }, [Merchant]);
 
-  // Trigger voice verification popup after successful scan
-  useEffect(() => {
-    const logPhase = async (msg, data = {}) => {
-      console.log(msg, data);
-      try {
-        await fetch('/securityscan/api/client-log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ component: "PageJS-Phase", message: msg, ...data })
-        });
-      } catch (e) { /* ignore */ }
-    };
-    
-    logPhase(`🔍 [PHASE MONITOR] Phase changed to: ${currentPhase}`);
-    
-    if (currentPhase === "awaiting-voice-verification") {
-      logPhase("⏳ Awaiting voice verification - encrypted data NOT exposed yet");
-      
-      // 🔒 CRITICAL: FORCE STOP CAMERA BEFORE VOICE VERIFICATION
-      // This is 200% necessary for Android to release camera resources
-      const stopCameraAndShowVoice = async () => {
-        await logPhase("🎥 [VOICE PREP] Forcing camera stop before voice verification...");
-        
-        // Stop detection loops immediately
-        stopRequestedRef.current = true;
-        setDetectionActive(false);
-        
-        // Get camera stream and stop ALL tracks
-        const stream = videoRef.current?.srcObject;
-        if (stream) {
-          const tracks = stream.getTracks();
-          await logPhase(`   └─ Found ${tracks.length} camera track(s) - stopping all...`);
-          
-          tracks.forEach((track, index) => {
-            console.log(`      └─ [${index + 1}/${tracks.length}] ${track.kind} - ${track.label} - State: ${track.readyState}`);
-            track.stop();
-            track.enabled = false; // Force disable for Android
-            console.log(`      └─ ✅ Stopped - New state: ${track.readyState}`);
-          });
-          
-          await logPhase("   └─ ✅ All camera tracks stopped");
-        } else {
-          await logPhase("   └─ ⚠️ No active camera stream found (might already be stopped)");
-        }
-        
-        // Clear video element completely
-        if (videoRef.current) {
-          await logPhase("   └─ Clearing video element...");
-          videoRef.current.pause();
-          videoRef.current.srcObject = null;
-          videoRef.current.src = "";
-          videoRef.current.load();
-          videoRef.current.onloadedmetadata = null;
-          videoRef.current.oncanplay = null;
-          await logPhase("   └─ ✅ Video element cleared");
-        }
-        
-        // Hide camera UI
-        setCameraHidden(true);
-        setIsCameraPaused(true);
-        
-        // Wait for Android to release resources (critical for Android WebView)
-        await logPhase("   └─ ⏳ Waiting 800ms for Android to release camera hardware...");
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        await logPhase("✅ [VOICE PREP] Camera fully released - NOW showing voice verification");
-        setShowVoiceVerification(true);
-      };
-      
-      stopCameraAndShowVoice();
-    }
-    
-    if (currentPhase === "results" && finalOcrResults) {
-      logPhase("✅ Voice verification completed AND results phase - data now accessible to Android");
-    }
-  }, [currentPhase, finalOcrResults]);
+  // Voice verification now happens at initial stage, not after scan
 
 
 
-  
+
   // Initialize window.scanStatus for Android polling
   useEffect(() => {
     // Set initial incomplete status
@@ -457,118 +382,6 @@ const CardDetectionApp = () => {
       }
     } catch (error) {
       console.error("❌ Error resetting zoom:", error);
-    }
-  };
-
-  // Stop camera completely to free up resources for voice recording
-  const stopCameraForVoice = async () => {
-    return new Promise((resolve) => {
-      try {
-        console.log("🎥 === STOPPING CAMERA FOR VOICE VERIFICATION (Android Strict Mode) ===");
-        
-        // 1. Stop detection loops FIRST
-        console.log("   └─ [1/6] Stopping detection loops...");
-        stopRequestedRef.current = true;
-        setDetectionActive(false);
-        
-        // 2. Stop all camera tracks with Android-specific cleanup
-        const stream = videoRef.current?.srcObject;
-        if (stream) {
-          const tracks = stream.getTracks();
-          console.log(`   └─ [2/6] Found ${tracks.length} track(s) to stop`);
-          
-          tracks.forEach(track => {
-            console.log(`      └─ Stopping: ${track.kind} - ${track.label} - State: ${track.readyState}`);
-            track.stop();
-            // 🔒 ANDROID FIX: Force immediate track cleanup
-            track.enabled = false;
-            console.log(`      └─ Track stopped - New state: ${track.readyState}`);
-          });
-        } else {
-          console.log("   └─ [2/6] No camera stream to stop");
-        }
-        
-        // 3. Clear video element completely with Android-specific steps
-        if (videoRef.current) {
-          console.log("   └─ [3/6] Clearing video element...");
-          
-          // Pause video first
-          videoRef.current.pause();
-          
-          // Clear all sources
-          videoRef.current.srcObject = null;
-          videoRef.current.src = "";
-          
-          // Force unload on Android
-          videoRef.current.load();
-          
-          // Extra step for Android: remove all event listeners
-          videoRef.current.onloadedmetadata = null;
-          videoRef.current.oncanplay = null;
-          
-          console.log("   └─ Video element fully cleared");
-        }
-        
-        // 4. Force garbage collection hint (Android WebView specific)
-        console.log("   └─ [4/6] Forcing resource cleanup...");
-        if (stream) {
-          // Explicitly null out the stream reference
-          stream.getTracks().forEach(track => {
-            // Double-check track is stopped
-            if (track.readyState !== 'ended') {
-              console.warn(`      └─ ⚠️ Track still not ended: ${track.label}, forcing stop again`);
-              track.stop();
-            }
-          });
-        }
-        
-        // 5. Hide camera UI
-        console.log("   └─ [5/6] Hiding camera UI...");
-        setCameraHidden(true);
-        setIsCameraPaused(true);
-        
-        // 6. Android-specific: Wait for resources to fully release
-        console.log("   └─ [6/6] Waiting for Android to release camera resources...");
-        setTimeout(() => {
-          console.log("✅ Camera fully stopped, resources released, Android can now access microphone");
-          resolve();
-        }, 500); // Give Android WebView time to release camera resources
-        
-      } catch (error) {
-        console.error("❌ Error stopping camera:", error);
-        resolve(); // Resolve anyway to continue
-      }
-    });
-  };
-
-  // Restart camera after voice recording
-  const restartCameraAfterVoice = async () => {
-    try {
-      console.log("🔄 === RESTARTING CAMERA AFTER VOICE VERIFICATION ===");
-      
-      // 1. Show camera UI again
-      setCameraHidden(false);
-      console.log("   └─ Camera UI shown");
-      
-      // 2. Small delay before reinitializing
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // 3. Determine which side we're scanning based on current phase
-      const scanSide = currentPhase === "awaiting-front-card" ? "front" : "back";
-      console.log(`   └─ Reinitializing ${scanSide} camera`);
-      
-      // 4. Reset stop flag to allow detection
-      stopRequestedRef.current = false;
-      
-      // 5. Reinitialize camera with correct side
-      await initializeCamera(videoRef, handleCameraPermissionError, scanSide);
-      setIsCameraPaused(false);
-      
-      console.log("✅ Camera restarted successfully");
-    } catch (error) {
-      console.error("❌ Error restarting camera:", error);
-      setCameraError('Failed to restart camera. Please refresh the page.');
-      setShowPermissionAlert(true);
     }
   };
 
@@ -863,6 +676,18 @@ const CardDetectionApp = () => {
     checkAuthData();
   }, []);
 
+  // Initialize voice verification after authentication
+  useEffect(() => {
+    if (authData && !authLoading && !voiceVerificationComplete) {
+      console.log("🎤 Auth ready - checking voice registration status before showing camera...");
+      setVoiceVerificationLoading(true);
+      checkVoiceRegistrationStatus();
+      setVoiceVerificationLoading(false);
+      // Show voice verification modal immediately
+      setShowVoiceVerification(true);
+    }
+  }, [authData, authLoading, voiceVerificationComplete]);
+
   // Helper function to clear detection timeout
   const clearDetectionTimeout = () => {
     if (detectionTimeoutRef.current) {
@@ -887,10 +712,10 @@ const CardDetectionApp = () => {
     }, DETECTION_TIMEOUT);
   };
 
-  // Initialize camera after auth is ready
+  // Initialize camera after voice verification is complete
   useEffect(() => {
-    if (authData && !authLoading) {
-      console.log('📹 Initializing camera with permission handling...');
+    if (authData && !authLoading && voiceVerificationComplete) {
+      console.log('📹 Voice verification complete - now initializing camera with permission handling...');
       
       const initCamera = async () => {
         try {
@@ -966,7 +791,7 @@ const CardDetectionApp = () => {
         clearInterval(countdownIntervalRef.current);
       }
     };
-  }, [authData, authLoading]);
+  }, [authData, authLoading, voiceVerificationComplete]);
 
 
 
@@ -1682,90 +1507,25 @@ const CardDetectionApp = () => {
       }).catch(err => console.error('Failed to log:', err));
     };
     
-    logToServer("✅ Voice verification completed successfully", { 
+    logToServer("✅ Voice verification completed successfully at initial stage", { 
       result_keys: Object.keys(result),
+      mode: voiceVerificationMode,
       has_verification_id: !!(result.verification_id || result.id)
     });
     
-    // Get encrypted data from memory (stored during back scan)
-    const finalData = backScanResultRef.current;
+    // Mark voice verification as complete
+    setVoiceVerificationComplete(true);
+    setShowVoiceVerification(false);
     
-    if (!finalData) {
-      logToServer("❌ No scan data found in memory - CRITICAL ERROR");
-      setErrorMessage("Verification succeeded but scan data was lost.");
-      setCurrentPhase("error");
-      return;
-    }
-
-    try {
-      logToServer("🔓 Exposing encrypted data after voice verification", {
-        has_encrypted_data: !!finalData.encrypted_data,
-        verification_id: result.verification_id || result.id
-      });
-      
-      // NOW expose encrypted data to React state
-      setFinalOcrResults(finalData);
-      setCurrentPhase("results");
-
-      // 🔓 CRITICAL: NOW set complete_scan = true for Android (data was in memory, now exposed)
-      window.scanStatus = {
-        complete_scan: true, // ✅ Android can NOW process
-        encrypted_data: finalData.encrypted_data,
-        status: "verified",
-        voice_verified: true,
-        verification_id: result.verification_id || result.id,
-        // Include all scan data fields for Android
-        ...finalData
-      };
-
-      logToServer("✅ COMPLETE SUCCESS - Android can now access window.scanStatus", {
-        complete_scan: true,
-        voice_verified: true,
-        has_encrypted_data: !!finalData.encrypted_data
-      });
-
-      // Cleanup
-      backScanResultRef.current = null; // Clear from memory
-      setShowVoiceVerification(false);
-      
-      // ❌ DO NOT restart camera after successful verification
-      // The scan is complete, user is on results screen
-      // Camera should stay off - Android will handle cleanup from here
-        
-    } catch (error) {
-      logToServer("❌ EXCEPTION CAUGHT in handleVoiceVerificationSuccess", {
-        error_name: error.name,
-        error_message: error.message,
-        error_stack: error.stack
-      });
-      setErrorMessage(`Verification failed: ${error.message}`);
-      setCurrentPhase("error");
-    }
+    logToServer("🎬 Ready to proceed with card scanning", {
+      voice_verified: true,
+      verification_id: result.verification_id || result.id
+    });
   };
 
   const handleVoiceVerificationClose = () => {
     console.log("⚠️ Voice verification popup closed without completion");
-    
-    // Restart camera when closing popup
-    restartCameraAfterVoice().catch(err => 
-      console.error("Failed to restart camera on close:", err)
-    );
-    
-    if (backScanResultRef.current) {
-      console.log("🗑️ Discarding unverified scan data from memory");
-      backScanResultRef.current = null; // Clear from memory
-    }
-    
-    // Reset Android status
-    window.scanStatus = {
-      complete_scan: false,
-      status: "cancelled",
-      message: "Voice verification cancelled"
-    };
-    
-    setShowVoiceVerification(false);
-    setErrorMessage("Voice verification cancelled. Please scan your card again.");
-    setCurrentPhase("idle");
+    // Do nothing - user must complete voice verification to proceed
   };
 
   const handleFakeCardRetry = () => {
@@ -1874,21 +1634,19 @@ const CardDetectionApp = () => {
           </div>
         )}
 
-        {!cameraHidden && (
-          <CameraView
-            videoRef={videoRef}
-            canvasRef={canvasRef}
-            currentPhase={currentPhase}
-            countdown={countdown}
-            detectionActive={detectionActive}
-            frontScanState={frontScanState}
-            isProcessing={isProcessing}
-            showPromptText={showPromptText}
-            promptText={promptText}
-            capturedImage={capturedImage}
-            showCaptureSuccessMessage={showCaptureSuccessMessage}
-          />
-        )}
+        <CameraView
+          videoRef={videoRef}
+          canvasRef={canvasRef}
+          currentPhase={currentPhase}
+          countdown={countdown}
+          detectionActive={detectionActive}
+          frontScanState={frontScanState}
+          isProcessing={isProcessing}
+          showPromptText={showPromptText}
+          promptText={promptText}
+          capturedImage={capturedImage}
+          showCaptureSuccessMessage={showCaptureSuccessMessage}
+        />
 
         <ControlPanel
           currentPhase={currentPhase}
@@ -1920,7 +1678,7 @@ const CardDetectionApp = () => {
           detectionActive={detectionActive}
         />
 
-        {/* Voice Verification Popup */}
+        {/* Voice Verification Popup - Initial Step */}
         <VoiceVerification
           isOpen={showVoiceVerification}
           onClose={handleVoiceVerificationClose}
@@ -1928,8 +1686,6 @@ const CardDetectionApp = () => {
           merchantId={authData?.merchantId}
           onSuccess={handleVoiceVerificationSuccess}
           mode={voiceVerificationMode}
-          onCameraStop={stopCameraForVoice}
-          onCameraRestart={restartCameraAfterVoice}
         />
 
         <footer className="text-center text-sm text-gray-400 mt-8">
