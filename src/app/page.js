@@ -1806,10 +1806,11 @@ const CardDetectionApp = () => {
 
         // 🔓 CRITICAL: Trigger a new fetch so iOS/Android intercepts it
         // (They intercepted the original Python API response, but we blocked it via window.scanStatus)
-        // Now we re-trigger the same endpoint with complete data so they intercept it again
+        // Now we trigger via our local endpoint which iOS/Android can intercept
         logToServer("📡 Triggering fetch intercept for iOS/Android to receive final data", {
-          endpoint: "api.cardnest.io/detect",
-          reason: "Re-trigger intercept after voice verification"
+          endpoint: "/securityscan/api/scan-complete",
+          reason: "Re-trigger intercept after voice verification",
+          has_encrypted_data: !!finalData.encrypted_data
         });
 
         try {
@@ -1824,8 +1825,9 @@ const CardDetectionApp = () => {
             ...finalData
           };
 
-          // Call the same endpoint so iOS/Android fetch interceptor catches it
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/detect`, {
+          // Call local endpoint (iOS/Android will intercept ANY fetch, so this works too)
+          // The key is that iOS sees a fetch happening and intercepts the response
+          fetch('/api/scan-complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(intercepPayload)
@@ -1833,7 +1835,8 @@ const CardDetectionApp = () => {
             logToServer("📡 Fetch intercept triggered successfully", {
               status: response.status,
               complete_scan: true,
-              has_encrypted_data: !!finalData.encrypted_data
+              has_encrypted_data: !!finalData.encrypted_data,
+              endpoint: "/api/scan-complete"
             });
           }).catch(error => {
             logToServer("⚠️ Fetch intercept attempt failed (non-critical)", {
