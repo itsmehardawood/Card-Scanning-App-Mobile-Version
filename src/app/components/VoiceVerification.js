@@ -152,10 +152,7 @@ const VoiceVerification = ({
       for (const type of supportedTypes) {
         if (MediaRecorder.isTypeSupported(type)) {
           mimeType = type;
-          logToAndroid("✅ MediaRecorder supports MIME type", { 
-            mimeType, 
-            platform: isIOS ? 'iOS' : 'Android' 
-          });
+        
           break;
         }
       }
@@ -179,7 +176,7 @@ const VoiceVerification = ({
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
-          logToAndroid("Audio chunk received", { size: event.data.size });
+          // logToAndroid("Audio chunk received", { size: event.data.size });
         }
       };
 
@@ -190,12 +187,7 @@ const VoiceVerification = ({
         setAudioBlob(audioBlob);
         setHasRecorded(true);
         
-        logToAndroid("Recording stopped", { 
-          blobSize: audioBlob.size,
-          blobType: audioBlob.type,
-          actualMimeType: actualMimeType,
-          chunks: audioChunksRef.current.length
-        });
+    
         
         // Stop all tracks
         if (streamRef.current) {
@@ -217,10 +209,7 @@ const VoiceVerification = ({
       setIsRecording(true);
       setRecordingTime(0);
       
-      logToAndroid("Recording started successfully", { 
-        state: mediaRecorder.state,
-        mimeType 
-      });
+   
       
       // Start timer
       timerIntervalRef.current = setInterval(() => {
@@ -302,10 +291,7 @@ const VoiceVerification = ({
     try {
       const recorder = mediaRecorderRef.current;
       
-      logToAndroid("Stop recording requested", {
-        recorderExists: !!recorder,
-        recorderState: recorder?.state
-      });
+    
       
       if (!recorder) {
         logToAndroid("⚠️ No mediaRecorder found");
@@ -333,7 +319,7 @@ const VoiceVerification = ({
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => {
             track.stop();
-            logToAndroid("Audio track stopped", { label: track.label });
+            // logToAndroid("Audio track stopped", { label: track.label });
           });
           streamRef.current = null;
         }
@@ -347,7 +333,7 @@ const VoiceVerification = ({
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => {
             track.stop();
-            logToAndroid("Audio track stopped (cleanup)", { label: track.label });
+            // logToAndroid("Audio track stopped (cleanup)", { label: track.label });
           });
           streamRef.current = null;
         }
@@ -362,10 +348,7 @@ const VoiceVerification = ({
   };
 
   const handleRecordClick = () => {
-    logToAndroid("Record button clicked", { 
-      currentState: isRecording ? "recording" : "not recording",
-      hasAudio: !!audioBlob
-    });
+  
     
     if (isRecording) {
       stopRecording();
@@ -407,17 +390,11 @@ const VoiceVerification = ({
       formData.append("user_id", userId);
       formData.append("merchant_id", merchantId);
 
-      // Log original blob type
-      logToAndroid("Audio blob original type", { 
-        original_type: audioBlob.type,
-        size: audioBlob.size
-      });
+      
 
       // Strip codec params (e.g. "audio/webm;codecs=opus" → "audio/webm")
       const cleanMimeType = (audioBlob.type || "audio/webm").split(';')[0].trim();
-      logToAndroid("Audio blob after stripping codecs", { 
-        clean_type: cleanMimeType
-      });
+   
 
       const extMap = {
         "audio/mp4": "m4a",
@@ -432,24 +409,17 @@ const VoiceVerification = ({
       // Append original blob directly (do NOT wrap it again)
       formData.append("file", audioBlob, fileName);
 
-      logToAndroid("FormData prepared - exactly like curl", {
-        user_id: userId,
-        merchant_id: merchantId,
-        file_name: fileName,
-        file_type: cleanMimeType,
-        file_size: audioBlob.size,
-        note: "Sending as multipart/form-data (same as curl)"
-      });
+
 
       const apiEndpoint = mode === "verify" 
         ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
         : `${process.env.NEXT_PUBLIC_API_URL}/voice/register`;
 
-      logToAndroid(`Submitting voice ${mode}`, {
-        endpoint: apiEndpoint,
-        method: "POST",
-        body_type: "FormData with 3 fields (user_id, merchant_id, file)"
-      });
+      // logToAndroid(`Submitting voice ${mode}`, {
+      //   endpoint: apiEndpoint,
+      //   method: "POST",
+      //   body_type: "FormData with 3 fields (user_id, merchant_id, file)"
+      // });
 
       // Send to API
       const response = await fetch(apiEndpoint, {
@@ -653,7 +623,6 @@ const VoiceVerification = ({
           >
             {isSubmitting ? (
               <>
-                <span className="inline-block animate-spin mr-2">⏳</span>
                 Submitting...
               </>
             ) : (
