@@ -411,9 +411,13 @@ const VoiceVerification = ({
 
 
 
-      const apiEndpoint = mode === "verify" 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
-        : `${process.env.NEXT_PUBLIC_API_URL}/voice/register`;
+      // const apiEndpoint = mode === "verify" 
+      //   ? `${process.env.NEXT_PUBLIC_API_URL}/voice/verify`
+      //   : `${process.env.NEXT_PUBLIC_API_URL}/voice/register`;
+
+          const apiEndpoint = mode === "verify" 
+        ? `https://api.cardnest.io/voice/verify`
+        : `https://api.cardnest.io/voice/register`;
 
       // logToAndroid(`Submitting voice ${mode}`, {
       //   endpoint: apiEndpoint,
