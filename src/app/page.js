@@ -125,7 +125,7 @@ const CardDetectionApp = () => {
       setDebugInfo("Fetching existing display info...");
 
       const response = await fetch(
-        `http://52.55.249.9:8001/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
+        `https://admin.cardnest.io/api/getmerchantDisplayInfo?merchantId=${encodeURIComponent(
           merchantId
         )}`,
         {
