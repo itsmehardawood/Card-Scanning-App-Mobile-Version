@@ -379,7 +379,7 @@ const VoiceVerification = ({
     }
 
     // Use dummy phone if missing
-    const userId = phoneNumber || "923020447033";
+    const userId = phoneNumber || "923020447034";
     if (!phoneNumber) logToAndroid("Using dummy phone number for testing", { user_id: userId });
 
     setIsSubmitting(true);

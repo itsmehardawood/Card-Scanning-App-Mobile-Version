@@ -581,7 +581,7 @@ const CardDetectionApp = () => {
 
             // Store phone number in localStorage if available
             // Use dummy number (923020447031) if not provided for testing
-            const finalPhoneNumber = sessionData.phoneNumber || "923020447033";
+            const finalPhoneNumber = sessionData.phoneNumber || "923020447034";
             localStorage.setItem("phoneNumber", finalPhoneNumber);
 
             console.log("📞 Phone number stored in localStorage:", finalPhoneNumber, 
