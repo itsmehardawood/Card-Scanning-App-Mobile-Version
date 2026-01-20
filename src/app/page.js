@@ -15,6 +15,7 @@ import {
   checkCameraPermissions,
   requestCameraPermissions,
   isCameraWorking,
+  isIOSDevice,
 } from "./utils/CameraUtils";
 import { sendFrameToAPI, reportFailure } from "./utils/apiService";
 import { useDetection } from "./hooks/UseDetection";
@@ -50,6 +51,7 @@ const CardDetectionApp = () => {
   const [showPermissionAlert, setShowPermissionAlert] = useState(false);
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [isIOSDeviceDetected, setIsIOSDeviceDetected] = useState(false);
 
   // Prompt text state for positioning guidance
   const [showPromptText, setShowPromptText] = useState(false);
@@ -325,6 +327,12 @@ const CardDetectionApp = () => {
   // Zoom control functions
   const applyZoom = async (zoomLevel = 1.5) => {
     try {
+      // 📱 Skip zoom on iOS to avoid lens switching and zoom artifacts
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping zoom to avoid lens switching');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -354,6 +362,12 @@ const CardDetectionApp = () => {
 
   const resetZoom = async () => {
     try {
+      // 📱 Skip zoom reset on iOS
+      if (isIOSDeviceDetected) {
+        console.log('📱 iOS device - skipping zoom reset');
+        return false;
+      }
+
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -374,16 +388,6 @@ const CardDetectionApp = () => {
   // Flashlight control functions
   const enableFlashlight = async () => {
     try {
-      // 🍎 Skip flashlight on iOS to prevent camera switching
-      const userAgent = navigator.userAgent;
-      const isIOS = /iPhone|iPad|iPod/.test(userAgent);
-      
-      if (isIOS) {
-        console.log("🍎 iOS detected - skipping flashlight to prevent camera switching");
-        setFlashlightEnabled(false);
-        return true; // Return true so the scan process continues
-      }
-      
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -413,15 +417,6 @@ const CardDetectionApp = () => {
 
   const disableFlashlight = async () => {
     try {
-      // 🍎 Skip on iOS (flashlight was never enabled)
-      const userAgent = navigator.userAgent;
-      const isIOS = /iPhone|iPad|iPod/.test(userAgent);
-      
-      if (isIOS) {
-        console.log("🍎 iOS detected - flashlight was not enabled, nothing to disable");
-        return;
-      }
-      
       const stream = videoRef.current?.srcObject;
       if (stream) {
         const track = stream.getVideoTracks()[0];
@@ -724,6 +719,11 @@ const CardDetectionApp = () => {
       
       const initCamera = async () => {
         try {
+          // Detect if iOS device and store in state
+          const iosDevice = isIOSDevice();
+          setIsIOSDeviceDetected(iosDevice);
+          console.log(`📱 Device type - iOS: ${iosDevice}`);
+
           // Check permission status first
           const permissionStatus = await checkCameraPermissions();
           setCameraPermissionStatus(permissionStatus);
@@ -749,8 +749,8 @@ const CardDetectionApp = () => {
         }
       }
     }
-          // Try to initialize camera
-          await initializeCamera(videoRef, handleCameraPermissionError);
+          // Try to initialize camera with iOS flag
+          await initializeCamera(videoRef, handleCameraPermissionError, 'back', iosDevice);
           setCameraInitialized(true);
           setCameraPermissionStatus('granted');
           console.log("✅ Camera initialized successfully");
