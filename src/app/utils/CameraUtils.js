@@ -72,7 +72,7 @@ const logToServer = async (type, message, data = {}) => {
       return;
     }
     
-    console.log(`📤 Sending to server: [${type}] ${message}`);
+    // console.log(`📤 Sending to server: [${type}] ${message}`);
     
     const response = await fetch('/securityscan/api/debug-camera', {
       method: 'POST',
@@ -105,9 +105,9 @@ export const enumerateVideoDevices = async () => {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = devices.filter(device => device.kind === 'videoinput');
     
-    console.log(`📹 Found ${videoDevices.length} video input device(s):`);
+    // console.log(`📹 Found ${videoDevices.length} video input device(s):`);
     videoDevices.forEach((device, index) => {
-      console.log(`  ${index + 1}. ${device.label || 'Unknown Camera'} (ID: ${device.deviceId.substring(0, 8)}...)`);
+      // console.log(`  ${index + 1}. ${device.label || 'Unknown Camera'} (ID: ${device.deviceId.substring(0, 8)}...)`);
     });
     
     return videoDevices;
@@ -338,13 +338,13 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
     const devices = await enumerateVideoDevices();
     
     // Debug log - check raw device objects
-    console.log('📷 Raw devices from enumeration:', devices.map(d => ({
-      label: d.label,
-      deviceId: d.deviceId,
-      kind: d.kind,
-      hasDeviceId: !!d.deviceId,
-      deviceIdType: typeof d.deviceId
-    })));
+    // console.log('📷 Raw devices from enumeration:', devices.map(d => ({
+    //   label: d.label,
+    //   deviceId: d.deviceId,
+    //   kind: d.kind,
+    //   hasDeviceId: !!d.deviceId,
+    //   deviceIdType: typeof d.deviceId
+    // })));
     
     // Log all cameras to server
     await logToServer('device-info', `Found ${devices.length} cameras`, {
@@ -387,56 +387,56 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       return cameraObj;
     });
     
-    console.log('📷 Classified cameras:');
-    classifiedCameras.forEach(cam => {
-      console.log(`  - ${cam.label || 'Unknown'}: facing=${cam.facing}, deviceId=${cam.deviceId ? cam.deviceId.substring(0, 12) + '...' : 'MISSING'}`);
-    });
+    // console.log('📷 Classified cameras:');
+    // classifiedCameras.forEach(cam => {
+    //   console.log(`  - ${cam.label || 'Unknown'}: facing=${cam.facing}, deviceId=${cam.deviceId ? cam.deviceId.substring(0, 12) + '...' : 'MISSING'}`);
+    // });
     
-    console.log('📷 Classified cameras full details:', classifiedCameras.map(c => ({
-      label: c.label,
-      deviceId: c.deviceId,
-      facing: c.facing,
-      hasDeviceId: !!c.deviceId,
-      deviceIdLength: c.deviceId ? c.deviceId.length : 0
-    })));
+    // console.log('📷 Classified cameras full details:', classifiedCameras.map(c => ({
+    //   label: c.label,
+    //   deviceId: c.deviceId,
+    //   facing: c.facing,
+    //   hasDeviceId: !!c.deviceId,
+    //   deviceIdLength: c.deviceId ? c.deviceId.length : 0
+    // })));
     
     // Filter cameras based on scan side
     const targetFacing = scanSide === 'front' ? 'front' : 'back';
     let targetCameras = classifiedCameras.filter(cam => cam.facing === targetFacing);
     
-    console.log(`📷 After filtering for ${targetFacing}: ${targetCameras.length} cameras`);
+    // console.log(`📷 After filtering for ${targetFacing}: ${targetCameras.length} cameras`);
     targetCameras.forEach((cam, idx) => {
-      console.log(`  [${idx}] label=${cam.label}, deviceId=${cam.deviceId}, facing=${cam.facing}`);
+      // console.log(`  [${idx}] label=${cam.label}, deviceId=${cam.deviceId}, facing=${cam.facing}`);
     });
     
     // If no cameras match the target facing, include unknown cameras for back scan
     if (targetCameras.length === 0 && scanSide === 'back') {
-      console.log('📷 No clearly back-facing cameras found, including unknown facing cameras');
+      // console.log('📷 No clearly back-facing cameras found, including unknown facing cameras');
       targetCameras = classifiedCameras.filter(cam => cam.facing !== 'front');
-      console.log(`📷 After including unknown: ${targetCameras.length} cameras`);
+      // console.log(`📷 After including unknown: ${targetCameras.length} cameras`);
     }
     
     // If still no cameras, use all cameras
     if (targetCameras.length === 0) {
-      console.log('📷 No matching cameras found, using all available cameras');
+      // console.log('📷 No matching cameras found, using all available cameras');
       targetCameras = classifiedCameras;
     }
     
-    console.log(`📷 ${targetCameras.length} candidate camera(s) for ${scanSide}-side scan`);
-    console.log('📷 Target cameras RAW:', targetCameras);
-    console.log('📷 Target cameras details:', targetCameras.map(c => ({
-      label: c.label,
-      deviceId: c.deviceId,
-      deviceIdShort: c.deviceId ? c.deviceId.substring(0, 12) + '...' : 'MISSING',
-      facing: c.facing,
-      hasDeviceId: !!c.deviceId,
-      deviceIdType: typeof c.deviceId,
-      deviceIdLength: c.deviceId ? c.deviceId.length : 0
-    })));
+    // console.log(`📷 ${targetCameras.length} candidate camera(s) for ${scanSide}-side scan`);
+    // console.log('📷 Target cameras RAW:', targetCameras);
+    // console.log('📷 Target cameras details:', targetCameras.map(c => ({
+    //   label: c.label,
+    //   deviceId: c.deviceId,
+    //   deviceIdShort: c.deviceId ? c.deviceId.substring(0, 12) + '...' : 'MISSING',
+    //   facing: c.facing,
+    //   hasDeviceId: !!c.deviceId,
+    //   deviceIdType: typeof c.deviceId,
+    //   deviceIdLength: c.deviceId ? c.deviceId.length : 0
+    // })));
     
     // 🎯 FILTER AND PRIORITIZE CAMERAS: Remove telephoto/ultra-wide, keep only main/wide cameras
     if (scanSide === 'back' && targetCameras.length > 1) {
-      console.log('🎯 Filtering and scoring cameras to prioritize main/wide cameras...');
+      // console.log('🎯 Filtering and scoring cameras to prioritize main/wide cameras...');
       
       // STEP 1: Filter out telephoto and ultra-wide cameras completely
       const filteredCameras = targetCameras.filter(cam => {
@@ -445,17 +445,17 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
         const isUltraWide = label.includes('ultra');
         
         if (isTelephoto) {
-          console.log(`🚫 EXCLUDING telephoto camera: ${cam.label}`);
+          // console.log(`🚫 EXCLUDING telephoto camera: ${cam.label}`);
           return false;
         }
         if (isUltraWide) {
-          console.log(`🚫 EXCLUDING ultra-wide camera: ${cam.label}`);
+          // console.log(`🚫 EXCLUDING ultra-wide camera: ${cam.label}`);
           return false;
         }
         return true;
       });
       
-      console.log(`✅ Filtered ${targetCameras.length} → ${filteredCameras.length} cameras (removed telephoto/ultra-wide)`);
+      // console.log(`✅ Filtered ${targetCameras.length} → ${filteredCameras.length} cameras (removed telephoto/ultra-wide)`);
       
       // STEP 2: Score remaining cameras and sort
       const scoredCameras = filteredCameras.map(cam => ({
@@ -468,25 +468,25 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       
       console.log('🎯 Camera priority ranking (after filtering):');
       scoredCameras.forEach((cam, idx) => {
-        console.log(`  ${idx + 1}. [Score: ${cam.score}] ${cam.label}`);
+        // console.log(`  ${idx + 1}. [Score: ${cam.score}] ${cam.label}`);
       });
       
       // Update targetCameras with filtered and sorted list
       targetCameras = scoredCameras;
       
-      console.log('✅ Will ONLY test main/wide cameras for torch - NO telephoto or ultra-wide');
+      // console.log('✅ Will ONLY test main/wide cameras for torch - NO telephoto or ultra-wide');
     }
     
     // For back-side scan, prioritize torch-capable cameras
     if (scanSide === 'back' && targetCameras.length > 0) {
-      console.log('🔦 ========================================');
-      console.log('🔦 STARTING TORCH CAPABILITY CHECK');
-      console.log('🔦 ========================================');
-      console.log(`🔦 Will test ${targetCameras.length} camera(s) for torch support`);
+      // console.log('🔦 ========================================');
+      // console.log('🔦 STARTING TORCH CAPABILITY CHECK');
+      // console.log('🔦 ========================================');
+      // console.log(`🔦 Will test ${targetCameras.length} camera(s) for torch support`);
       
       // Log each camera before sending to server
       targetCameras.forEach((c, idx) => {
-        console.log(`🔦 Camera ${idx}: label=${c.label}, deviceId=${c.deviceId}, facing=${c.facing}`);
+        // console.log(`🔦 Camera ${idx}: label=${c.label}, deviceId=${c.deviceId}, facing=${c.facing}`);
       });
       
       const camerasForLog = targetCameras.map(c => {
@@ -496,11 +496,11 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
           facing: c.facing || 'unknown',
           hasDeviceId: !!c.deviceId
         };
-        console.log('🔦 Prepared for server log:', logObj);
+        // console.log('🔦 Prepared for server log:', logObj);
         return logObj;
       });
       
-      console.log('🔦 Sending to server:', JSON.stringify(camerasForLog, null, 2));
+      // console.log('🔦 Sending to server:', JSON.stringify(camerasForLog, null, 2));
       
       await logToServer('torch-check-start', `Testing ${targetCameras.length} cameras for torch`, {
         cameras: camerasForLog
@@ -508,14 +508,14 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
       
       for (let i = 0; i < targetCameras.length; i++) {
         const camera = targetCameras[i];
-        console.log(`\n🔦 [${i + 1}/${targetCameras.length}] Testing camera: ${camera.label || 'Unknown'}`);
-        console.log(`🔦   - Device ID present: ${!!camera.deviceId}`);
-        console.log(`🔦   - Device ID type: ${typeof camera.deviceId}`);
-        console.log(`🔦   - Device ID value: ${camera.deviceId || 'NULL/UNDEFINED'}`);
+        // console.log(`\n🔦 [${i + 1}/${targetCameras.length}] Testing camera: ${camera.label || 'Unknown'}`);
+        // console.log(`🔦   - Device ID present: ${!!camera.deviceId}`);
+        // console.log(`🔦   - Device ID type: ${typeof camera.deviceId}`);
+        // console.log(`🔦   - Device ID value: ${camera.deviceId || 'NULL/UNDEFINED'}`);
         
         // Skip cameras without valid deviceId
         if (!camera.deviceId || typeof camera.deviceId !== 'string' || camera.deviceId.length === 0) {
-          console.log(`⏭️ ⚠️ SKIPPING - Invalid deviceId`);
+          // console.log(`⏭️ ⚠️ SKIPPING - Invalid deviceId`);
           await logToServer('torch-test-skip', `Skipped: ${camera.label}`, {
             camera: { label: camera.label, deviceId: camera.deviceId },
             reason: 'Invalid deviceId'
@@ -523,8 +523,8 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
           continue;
         }
         
-        console.log(`🔦 Testing camera: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 12)}...)`);
-        console.log(`🔦 Calling checkCameraTorchSupport...`);
+        // console.log(`🔦 Testing camera: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 12)}...)`);
+        // console.log(`🔦 Calling checkCameraTorchSupport...`);
         
         const torchResult = await checkCameraTorchSupport(camera.deviceId);
         // console.log(`🔦 Torch test result:`, torchResult);
@@ -545,11 +545,11 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
         // });
         
         if (torchResult.supported) {
-          console.log('🔦 ========================================');
-          console.log(`🔦 ✅ FOUND TORCH-CAPABLE CAMERA!`);
-          console.log(`🔦 Camera: ${camera.label || torchResult.trackLabel}`);
-          console.log(`🔦 Device ID: ${camera.deviceId}`);
-          console.log('🔦 ========================================');
+          // console.log('🔦 ========================================');
+          // console.log(`🔦 ✅ FOUND TORCH-CAPABLE CAMERA!`);
+          // console.log(`🔦 Camera: ${camera.label || torchResult.trackLabel}`);
+          // console.log(`🔦 Device ID: ${camera.deviceId}`);
+          // console.log('🔦 ========================================');
           
           const selectedCamera = {
             deviceId: camera.deviceId,
@@ -564,21 +564,21 @@ export const findBestCameraForScan = async (scanSide = 'back') => {
             camera: selectedCamera
           });
           
-          console.log('🔦 Returning torch-capable camera:', selectedCamera);
+
           return selectedCamera;
         } else {
-          console.log(`🔦 ❌ Camera does NOT support torch`);
-          console.log(`🔦   Reason: ${torchResult.error || 'No torch in capabilities'}`);
+          // console.log(`🔦 ❌ Camera does NOT support torch`);
+          // console.log(`🔦   Reason: ${torchResult.error || 'No torch in capabilities'}`);
         }
       }
       
-      console.log('\n🔦 ========================================');
-      console.log('🔦 ❌ NO TORCH-CAPABLE CAMERA FOUND');
-      console.log(`🔦 Tested ${targetCameras.length} camera(s), none have torch`);
+      // console.log('\n🔦 ========================================');
+      // console.log('🔦 ❌ NO TORCH-CAPABLE CAMERA FOUND');
+      // console.log(`🔦 Tested ${targetCameras.length} camera(s), none have torch`);
       
       if (TEST_MODE) {
-        console.log('🧪 TEST MODE ENABLED - Bypassing torch requirement');
-        console.log('🧪 Using first available back camera for testing');
+        // console.log('🧪 TEST MODE ENABLED - Bypassing torch requirement');
+        // console.log('🧪 Using first available back camera for testing');
         const testCamera = targetCameras[0];
         
         await logToServer('torch-check-complete', 'No torch camera found - TEST MODE bypass', {

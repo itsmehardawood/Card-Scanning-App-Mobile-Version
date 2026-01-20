@@ -121,7 +121,7 @@ const CardDetectionApp = () => {
     } 
 
     try {
-      console.log("🔍 Fetching merchant display info for:", merchantId);
+      // console.log("🔍 Fetching merchant display info for:", merchantId);
       setDebugInfo("Fetching existing display info...");
 
       const response = await fetch(
@@ -170,7 +170,7 @@ const CardDetectionApp = () => {
           if (display_logo) {
             // 🔒 Force HTTPS
             const safeLogo = display_logo.replace(/^http:\/\//i, "http://");
-            console.log("✅ Setting merchant logo:", safeLogo);
+            // console.log("✅ Setting merchant logo:", safeLogo);
             setMerchantLogo(safeLogo);
           }
 
@@ -190,7 +190,7 @@ const CardDetectionApp = () => {
   // Call fetchMerchantDisplayInfo when Merchant state is updated
   useEffect(() => {
     if (Merchant) {
-      console.log("� Merchant ID available, fetching display info:", Merchant);
+      // console.log("� Merchant ID available, fetching display info:", Merchant);
       fetchMerchantDisplayInfo(Merchant);
     }
   }, [Merchant]);
@@ -579,8 +579,8 @@ const CardDetectionApp = () => {
             const finalPhoneNumber = sessionData.phoneNumber || "923020447033";
             localStorage.setItem("phoneNumber", finalPhoneNumber);
 
-            console.log("📞 Phone number stored in localStorage:", finalPhoneNumber, 
-              sessionData.phoneNumber ? "(from device)" : "(using dummy for testing)");
+            // console.log("📞 Phone number stored in localStorage:", finalPhoneNumber, 
+            //   sessionData.phoneNumber ? "(from device)" : "(using dummy for testing)");
 
             const authObj = {
               merchantId: sessionData.merchantId,
@@ -596,10 +596,10 @@ const CardDetectionApp = () => {
 
             // Set merchant from session data if not already set from URL
             if (sessionData.merchantId) {
-              console.log(
-                "🏪 Setting merchant ID from session:",
-                sessionData.merchantId
-              );
+              // console.log(
+              //   "🏪 Setting merchant ID from session:",
+              //   sessionData.merchantId
+              // );
               setMerchant(sessionData.merchantId);
             }
 
@@ -1225,7 +1225,6 @@ const CardDetectionApp = () => {
             
             // ✅ Voice verification already completed at app startup
             // Expose encrypted data directly to Android
-            console.log("✅ Exposing encrypted data to Android (voice already verified)");
             
             // Set window status for Android with encrypted data
             window.scanStatus = {
@@ -1236,10 +1235,7 @@ const CardDetectionApp = () => {
               ...finalResult // Include all scan data including encryption
             };
             
-            console.log("✅ SCAN COMPLETE: Both front and back scans successful");
-            console.log("   └─ Voice was already verified at app startup");
-            console.log("   └─ Encrypted data now exposed to Android");
-            console.log("   └─ Moving directly to results phase");
+  
 
             setCurrentPhase("back-complete");
             setAttemptCount(0);
@@ -1455,10 +1451,10 @@ const CardDetectionApp = () => {
       return;
     }
     
-    console.log(`🔍 Using phone number for voice check: ${userId} (source: ${authData?.phoneNumber ? 'authData' : 'localStorage'})`);
+    // console.log(`🔍 Using phone number for voice check: ${userId} (source: ${authData?.phoneNumber ? 'authData' : 'localStorage'})`);
 
     try {
-      console.log(`🔍 Checking voice registration status for user: ${userId}`);
+      // console.log(`🔍 Checking voice registration status for user: ${userId}`);
       
       const response = await fetch(
         `https://admin.cardnest.io/api/voice/register/${userId}`
