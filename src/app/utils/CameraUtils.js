@@ -47,11 +47,7 @@ const isWebView = () => {
   return isIOSWebView || isAndroidWebView || window.ReactNativeWebView !== undefined;
 };
 
-// 📱 iOS DETECTION
-const isIOSDevice = () => {
-  const userAgent = navigator.userAgent;
-  return /iPhone|iPad|iPod/.test(userAgent);
-};
+
 
 // 📱 DEVICE TYPE DETECTION
 const isSamsungDevice = () => {
