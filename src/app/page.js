@@ -576,7 +576,7 @@ const CardDetectionApp = () => {
 
             // Store phone number in localStorage if available
             // Use dummy number (923020447031) if not provided for testing
-            const finalPhoneNumber = sessionData.phoneNumber || "923020447033";
+            const finalPhoneNumber = sessionData.phoneNumber || "923020447035";
             localStorage.setItem("phoneNumber", finalPhoneNumber);
 
             // console.log("📞 Phone number stored in localStorage:", finalPhoneNumber, 
@@ -650,8 +650,8 @@ const CardDetectionApp = () => {
         const demoMerchantId = "276581V33945Y270";
         const demoAuthObj = {
           merchantId: demoMerchantId,
-          authToken: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vNTIuNTUuMjQ5Ljk6ODAwMS9hcGkvbWVyY2hhbnRzY2FuL2dlbmVyYXRlVG9rZW4iLCJpYXQiOjE3Njc5NTgzMDksImV4cCI6MTc2Nzk2MTkwOSwibmJmIjoxNzY3OTU4MzA5LCJqdGkiOiJ6RGdFc3lJSllLTGdPQ2pZIiwic3ViIjoiMjc2NTgxVjMzOTQ1WTI3MCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjciLCJzY2FuX2lkIjoiZWJhNDIzNjUiLCJtZXJjaGFudF9pZCI6IjI3NjU4MVYzMzk0NVkyNzAiLCJlbmNyeXB0aW9uX2tleSI6IkVhWGFmWGMzVHR5bjBqbmoiLCJmZWF0dXJlcyI6bnVsbH0._89LBMPU-c6shvmDxkCDnEpRsSkvUut7-Yy6myFZ4p8",
-          timestamp: Date.now(),
+          authToken: "eiTIzKEhEL2eRUR92Iu2WwvCzJ3JovzVm1zRQ/0crpUJAx8lsKJu0HUXaTEITa4UxUayftKMdTIHhBGJRg0zM9Qqy8WC8xBA2gUinRIjjECQIL6dXBYvk6uvneNp4vM2hW6Nc3PNQLK8buaABud2OI+QbAmS9ZWtRdLzImQNKqu+HXtJGCWN9gyTJCTUoEYyjCc378GN/XVg4i/8mwdy0Ukfeq+x3GnzlrlQSzCdOcXSHrbqlCMpW9zrck2AExKUyRlt5J/1fSHMBjNVfz1pshdZZpR4rSelFHROZGZEZtCiYL2gP/Ds11gpW19wWjMV4zxDA1HBJeZhCjKOic6gDHqDS4YBWssfnqVavj3Me/K2wliq4rCmJOLtk9SayULKxWJiNDoz20qC16cSoSEKraehCJqBa6cbUl7mbvhA7NzBWz8jpgoOjEzoxitVKuTUeYYpASTpS/Rz9PWz0iEYV6RgbHagc2tORkvPZjd7AIfGDW32CiElQF7zKRb0YxxVqSrwK0Fg87mRtwmSQCSWUytLLGqZF2wRcMojoU68HJy1l0owBLl886K4+l4vbnfdUioeVkNhtCXMJFmLcJynGjHrksufcZIMQ5fksUoZKAXlTNdRih0RzUZcnVQumFKupcmImRXEUok3+Uwe8siyaSlELDE1P6TeAJiJF1oG/jc=",
+            timestamp: Date.now(),
           source: "development_demo",
         };
 

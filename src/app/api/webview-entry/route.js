@@ -107,7 +107,7 @@ export async function POST(request) {
         
         // Use dummy number if phoneNumber is NA, null, or empty for testing
         if (!phoneNumber || phoneNumber === "NA" || phoneNumber.trim() === "") {
-          phoneNumber = "923020447033";
+          phoneNumber = "923020447035";
           console.log("📞 Using dummy phone number for testing:", phoneNumber);
         }
 
