@@ -169,7 +169,7 @@ const CardDetectionApp = () => {
 
           if (display_logo) {
             // 🔒 Force HTTPS
-            const safeLogo = display_logo.replace(/^http:\/\//i, "http://");
+            const safeLogo = display_logo.replace(/^http:\/\//i, "https://");
             // console.log("✅ Setting merchant logo:", safeLogo);
             setMerchantLogo(safeLogo);
           }
