@@ -19,6 +19,7 @@ const VoiceVerification = ({
   const [debugInfo, setDebugInfo] = useState("");
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -67,6 +68,16 @@ const VoiceVerification = ({
       logToAndroid("Voice Verification opened at initial stage", diagnosticInfo);
       setDebugInfo(`WebView: ${isWebView()} | Mode: ${mode}`);
       logToAndroid("✅ Voice Verification ready - camera not yet initialized");
+      
+      // Small delay to ensure mode prop is stable before showing content
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    } else {
+      // Reset initialization when modal closes
+      setIsInitialized(false);
     }
   }, [isOpen, mode]);
 
@@ -495,6 +506,17 @@ const VoiceVerification = ({
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        {/* Loading State - Prevent Text Flicker */}
+        {!isInitialized && (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 text-sm">Initializing...</p>
+          </div>
+        )}
+        
+        {/* Main Content - Only show when initialized */}
+        {isInitialized && (
+          <>
         {/* Success Message - Full Screen Takeover */}
         {showSuccess && (
           <div className="absolute inset-0 bg-white rounded-lg flex flex-col items-center justify-center z-10">
@@ -639,6 +661,8 @@ const VoiceVerification = ({
         <p className="text-xs text-gray-500 text-center mt-4">
           Your voice data will be securely stored and used only for verification purposes.
         </p>
+          </>
+        )}
       </div>
     </div>
   );
